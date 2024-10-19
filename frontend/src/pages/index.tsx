@@ -1,6 +1,6 @@
 import React from 'react';
 import Layout from '../components/layout';
-import CourseList from '../components/course/course-list';
+import CourseList from '../components/courses/course-list';
 import { useAuth } from '../context/auth-context';
 import Link from 'next/link';
 
