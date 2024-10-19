@@ -1,25 +1,37 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
-import Button from '../common/button';
+import { TextField, Button, Box, Typography, CircularProgress, Snackbar } from '@mui/material';
+import { Alert } from '@mui/material';
+import MicIcon from '@mui/icons-material/Mic';
+import StopIcon from '@mui/icons-material/Stop';
 
 const LanguageInput: React.FC = () => {
   const [text, setText] = useState('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
   };
 
   const handleTextSubmit = async () => {
+    setIsLoading(true);
     try {
       await api.post('/language-preservation/text', { text });
       setText('');
-      alert('Text submitted successfully!');
+      setSnackbar({ open: true, message: 'Text submitted successfully!', severity: 'success' });
     } catch (error) {
       console.error('Error submitting text:', error);
-      alert('Failed to submit text. Please try again.');
+      setSnackbar({ open: true, message: 'Failed to submit text. Please try again.', severity: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -37,6 +49,7 @@ const LanguageInput: React.FC = () => {
       setIsRecording(true);
     } catch (error) {
       console.error('Error starting recording:', error);
+      setSnackbar({ open: true, message: 'Failed to start recording. Please try again.', severity: 'error' });
     }
   };
 
@@ -49,6 +62,7 @@ const LanguageInput: React.FC = () => {
 
   const handleAudioSubmit = async () => {
     if (audioBlob) {
+      setIsLoading(true);
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
 
@@ -57,38 +71,71 @@ const LanguageInput: React.FC = () => {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         setAudioBlob(null);
-        alert('Audio submitted successfully!');
+        setSnackbar({ open: true, message: 'Audio submitted successfully!', severity: 'success' });
       } catch (error) {
         console.error('Error submitting audio:', error);
-        alert('Failed to submit audio. Please try again.');
+        setSnackbar({ open: true, message: 'Failed to submit audio. Please try again.', severity: 'error' });
+      } finally {
+        setIsLoading(false);
       }
     }
   };
 
   return (
-    <div className="mt-8">
-      <h2 className="text-2xl font-semibold mb-4">Contribute to Language Preservation</h2>
-      <div className="mb-4">
-        <textarea
-          className="w-full p-2 border rounded"
-          rows={5}
-          value={text}
-          onChange={handleTextChange}
-          placeholder="Enter text in the language you're preserving..."
-        />
-        <Button onClick={handleTextSubmit} className="mt-2">Submit Text</Button>
-      </div>
-      <div>
-        <Button onClick={isRecording ? stopRecording : startRecording}>
+    <Box sx={{ maxWidth: 600, margin: 'auto' }}>
+      <Typography variant="h4" component="h2" gutterBottom>
+        Contribute to Language Preservation
+      </Typography>
+      <TextField
+        fullWidth
+        multiline
+        rows={4}
+        variant="outlined"
+        value={text}
+        onChange={handleTextChange}
+        placeholder="Enter text in the language you're preserving..."
+        sx={{ mb: 2 }}
+      />
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleTextSubmit}
+        disabled={isLoading || !text}
+        sx={{ mb: 4 }}
+      >
+        {isLoading ? <CircularProgress size={24} /> : 'Submit Text'}
+      </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Button
+          variant="contained"
+          color={isRecording ? 'secondary' : 'primary'}
+          startIcon={isRecording ? <StopIcon /> : <MicIcon />}
+          onClick={isRecording ? stopRecording : startRecording}
+          sx={{ mr: 2 }}
+        >
           {isRecording ? 'Stop Recording' : 'Start Recording'}
         </Button>
         {audioBlob && (
-          <Button onClick={handleAudioSubmit} className="ml-2">
-            Submit Audio
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleAudioSubmit}
+            disabled={isLoading}
+          >
+            {isLoading ? <CircularProgress size={24} /> : 'Submit Audio'}
           </Button>
         )}
-      </div>
-    </div>
+      </Box>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 };
 

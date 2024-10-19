@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { Typography, Box, Rating, TextField, Button, List, ListItem, Divider } from '@mui/material';
 import api from '@/utils/api';
-import Button from '@/components/common/button';
 
 interface Review {
   id: number;
-  userId: string;
-  userName: string;
+  user: string;
   rating: number;
   comment: string;
   createdAt: string;
@@ -18,9 +16,7 @@ interface CourseReviewsProps {
 
 const CourseReviews: React.FC<CourseReviewsProps> = ({ courseId }) => {
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [userRating, setUserRating] = useState(0);
-  const [userComment, setUserComment] = useState('');
-  const { data: session } = useSession();
+  const [newReview, setNewReview] = useState({ rating: 0, comment: '' });
 
   useEffect(() => {
     fetchReviews();
@@ -37,16 +33,9 @@ const CourseReviews: React.FC<CourseReviewsProps> = ({ courseId }) => {
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!session?.user) return;
-
     try {
-      await api.post(`/courses/${courseId}/reviews`, {
-        userId: (session.user as any).id, // Type assertion
-        rating: userRating,
-        comment: userComment,
-      });
-      setUserRating(0);
-      setUserComment('');
+      await api.post(`/courses/${courseId}/reviews`, newReview);
+      setNewReview({ rating: 0, comment: '' });
       fetchReviews();
     } catch (error) {
       console.error('Error submitting review:', error);
@@ -54,58 +43,44 @@ const CourseReviews: React.FC<CourseReviewsProps> = ({ courseId }) => {
   };
 
   return (
-    <div>
-      <h3 className="text-2xl font-semibold mb-4">Course Reviews</h3>
-      {session?.user && (
-        <form onSubmit={handleSubmitReview} className="mb-6">
-          <div className="mb-4">
-            <label className="block mb-2">Your Rating:</label>
-            <div className="flex">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setUserRating(star)}
-                  className={`text-2xl ${
-                    star <= userRating ? 'text-yellow-400' : 'text-gray-300'
-                  }`}
-                >
-                  ★
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mb-4">
-            <label htmlFor="comment" className="block mb-2">
-              Your Review:
-            </label>
-            <textarea
-              id="comment"
-              value={userComment}
-              onChange={(e) => setUserComment(e.target.value)}
-              className="w-full px-3 py-2 border rounded"
-              rows={4}
-            ></textarea>
-          </div>
-          <Button onClick={() => {}} className="submit-review">Submit Review</Button>
-        </form>
-      )}
-      <div className="space-y-4">
+    <Box mt={4}>
+      <Typography variant="h5" gutterBottom>Course Reviews</Typography>
+      <List>
         {reviews.map((review) => (
-          <div key={review.id} className="border p-4 rounded">
-            <div className="flex items-center mb-2">
-              <span className="font-semibold mr-2">{review.userName}</span>
-              <span className="text-yellow-400">{'★'.repeat(review.rating)}</span>
-              <span className="text-gray-300">{'★'.repeat(5 - review.rating)}</span>
-            </div>
-            <p>{review.comment}</p>
-            <p className="text-sm text-gray-500 mt-2">
-              {new Date(review.createdAt).toLocaleDateString()}
-            </p>
-          </div>
+          <React.Fragment key={review.id}>
+            <ListItem>
+              <Box>
+                <Typography variant="subtitle1">{review.user}</Typography>
+                <Rating value={review.rating} readOnly />
+                <Typography variant="body1">{review.comment}</Typography>
+                <Typography variant="caption">{new Date(review.createdAt).toLocaleDateString()}</Typography>
+              </Box>
+            </ListItem>
+            <Divider />
+          </React.Fragment>
         ))}
-      </div>
-    </div>
+      </List>
+      <Box component="form" onSubmit={handleSubmitReview} mt={2}>
+        <Typography variant="h6">Write a Review</Typography>
+        <Rating
+          value={newReview.rating}
+          onChange={(_, value) => setNewReview({ ...newReview, rating: value || 0 })}
+        />
+        <TextField
+          fullWidth
+          multiline
+          rows={4}
+          variant="outlined"
+          placeholder="Your review"
+          value={newReview.comment}
+          onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
+          margin="normal"
+        />
+        <Button type="submit" variant="contained" color="primary">
+          Submit Review
+        </Button>
+      </Box>
+    </Box>
   );
 };
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { Grid, Card, CardContent, CardActionArea, Typography } from '@mui/material';
 import { Course } from '@/types/course';
 
 interface CourseListProps {
@@ -8,17 +9,35 @@ interface CourseListProps {
 
 const CourseList: React.FC<CourseListProps> = ({ courses }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <Grid container spacing={4}>
       {courses.map((course) => (
-        <div key={course.id} className="border rounded-lg p-4 shadow-md">
-          <h2 className="text-xl font-semibold mb-2">{course.title}</h2>
-          <p className="text-gray-600 mb-4">{course.description}</p>
-          <Link href={`/courses/${course.id}`} className="text-blue-500 hover:underline">
-            View Course
-          </Link>
-        </div>
+        <Grid item key={course.id} xs={12} sm={6} md={4}>
+          <Card>
+            <CardActionArea component={Link} href={`/courses/${course.id}`}>
+              <CardContent>
+                <Typography gutterBottom variant="h5" component="div">
+                  {course.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {course.description}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Type: {course.type}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Topic: {course.topic}
+                </Typography>
+                {course.difficulty && (
+                  <Typography variant="body2" color="text.secondary">
+                    Difficulty: {course.difficulty}
+                  </Typography>
+                )}
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        </Grid>
       ))}
-    </div>
+    </Grid>
   );
 };
 

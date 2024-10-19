@@ -1,6 +1,12 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from . import models, schemas
+from typing import List
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 def get_courses(db: Session, skip: int = 0, limit: int = 10, search: str = None, course_type: str = None):
     query = db.query(models.Course)
@@ -61,16 +67,40 @@ def enroll_user_in_course(db: Session, user_id: int, course_id: int):
     db.refresh(new_enrollment)
     return new_enrollment
 
-def get_recommended_courses(db: Session, user_id: int, limit: int = 5):
-    user_enrollments = db.query(models.Enrollment).filter(models.Enrollment.user_id == user_id).all()
-    enrolled_course_ids = [enrollment.course_id for enrollment in user_enrollments]
-    
-    user_course_types = db.query(models.Course.type).filter(models.Course.id.in_(enrolled_course_ids)).distinct().all()
-    user_course_types = [course_type[0] for course_type in user_course_types]
-    
-    recommended_courses = db.query(models.Course).filter(
-        models.Course.id.notin_(enrolled_course_ids),
-        models.Course.type.in_(user_course_types)
-    ).order_by(func.random()).limit(limit).all()
-    
-    return recommended_courses
+class CourseRecommender:
+    def __init__(self, courses):
+        self.courses = courses
+        self.tfidf = TfidfVectorizer(stop_words='english')
+        self.tfidf_matrix = self.tfidf.fit_transform([f"{c.title} {c.description} {c.topic}" for c in courses])
+
+    def get_recommendations(self, course_id, num_recommendations=5):
+        course_idx = next(i for i, c in enumerate(self.courses) if c.id == course_id)
+        cosine_similarities = cosine_similarity(self.tfidf_matrix[course_idx], self.tfidf_matrix).flatten()
+        related_course_indices = cosine_similarities.argsort()[-num_recommendations-1:-1][::-1]
+        return [self.courses[i] for i in related_course_indices if i != course_idx]
+
+def get_course_recommendations(db: Session, course_id: int, num_recommendations: int = 5):
+    courses = db.query(models.Course).all()
+    recommender = CourseRecommender(courses)
+    return recommender.get_recommendations(course_id, num_recommendations)
+
+async def get_recommended_courses(db: AsyncSession, user_id: int, limit: int = 5) -> List[models.Course]:
+    user_enrollments = await db.execute(
+        select(models.Enrollment.course_id).where(models.Enrollment.user_id == user_id)
+    )
+    enrolled_course_ids = [enrollment.course_id for enrollment in user_enrollments.scalars().all()]
+
+    user_course_types = await db.execute(
+        select(models.Course.type).where(models.Course.id.in_(enrolled_course_ids)).distinct()
+    )
+    user_course_types = [course_type[0] for course_type in user_course_types.scalars().all()]
+
+    recommended_courses = await db.execute(
+        select(models.Course)
+        .where(models.Course.id.notin_(enrolled_course_ids))
+        .where(models.Course.type.in_(user_course_types))
+        .order_by(func.random())
+        .limit(limit)
+    )
+
+    return recommended_courses.scalars().all()

@@ -1,77 +1,83 @@
-import React, { useEffect } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import Layout from '@/components/layout';
-import Button from '@/components/common/button';
+import { signIn } from 'next-auth/react';
+import { Typography, TextField, Button, Box, Paper, Divider } from '@mui/material';
+import Layout from '../components/layout';
+import Web3SignIn from '../components/auth/Web3SignIn';
 
-const LoginPage: React.FC = () => {
-  const { data: session, status } = useSession();
+const Login: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
-  useEffect(() => {
-    if (session) {
-      router.push('/dashboard');
-    }
-  }, [session, router]);
-
-  if (status === 'loading') {
-    return (
-      <Layout title="Loading | Education Platform">
-        <div className="flex justify-center items-center h-screen">
-          <p className="text-xl">Loading...</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: '/dashboard' });
-  };
-
-  const handleEmailSignIn = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = (e.currentTarget.elements.namedItem('email') as HTMLInputElement).value;
-    if (email) {
-      signIn('email', { email, callbackUrl: '/dashboard' });
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      });
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
     }
   };
 
   return (
-    <Layout title="Login | Education Platform">
-      <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-3xl font-bold mb-6 text-center">Login</h1>
-        <Button
-          onClick={handleGoogleSignIn}
-          className="w-full mb-4 bg-red-500 hover:bg-red-600 text-white"
-        >
-          Sign in with Google
-        </Button>
-        <div className="relative my-6">
-          <hr className="border-t border-gray-300" />
-          <span className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2 text-gray-500">
-            or
-          </span>
-        </div>
-        <form onSubmit={handleEmailSignIn}>
-          <div className="mb-4">
-            <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+    <Layout title="Login | AI-Powered Learning Platform">
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 400 }}>
+          <Typography variant="h4" component="h1" gutterBottom align="center">
+            Sign In
+          </Typography>
+          <form onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Email"
+              variant="outlined"
+              margin="normal"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
-          </div>
-          <Button type="submit" className="w-full bg-blue-500 hover:bg-blue-600 text-white">
-            Sign in with Email
-          </Button>
-        </form>
-      </div>
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              variant="outlined"
+              margin="normal"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              color="primary"
+              size="large"
+              sx={{ mt: 2 }}
+            >
+              Sign In
+            </Button>
+          </form>
+          {error && (
+            <Typography color="error" align="center" sx={{ mt: 2 }}>
+              {error}
+            </Typography>
+          )}
+          <Divider sx={{ my: 3 }}>OR</Divider>
+          <Web3SignIn />
+        </Paper>
+      </Box>
     </Layout>
   );
 };
 
-export default LoginPage;
+export default Login;

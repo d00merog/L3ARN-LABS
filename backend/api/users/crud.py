@@ -1,8 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Dict, Optional
-from backend.ai_models import models, schemas
+from typing import List, Dict, Optional, Any
+from . import models, schemas
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
+from ...core.security import verify_password, get_password_hash, create_access_token
+from datetime import timedelta
+from ...core.config.settings import settings
+from fastapi import HTTPException
 
 async def get_user_course_progress(db: AsyncSession, user_id: int) -> List[Dict[str, float]]:
     try:
@@ -48,8 +52,9 @@ async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[m
     result = await db.execute(select(models.User).offset(skip).limit(limit))
     return result.scalars().all()
 
-async def create_user(db: AsyncSession, user: schemas.UserCreate) -> models.User:
-    db_user = models.User(**user.dict())
+async def create_user(db: AsyncSession, user: schemas.UserCreate):
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(email=user.email, hashed_password=hashed_password)
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
@@ -61,3 +66,55 @@ async def update_user(db: AsyncSession, user: models.User, user_update: schemas.
     await db.commit()
     await db.refresh(user)
     return user
+
+async def authenticate_user(db: AsyncSession, email: str, password: str):
+    user = await get_user_by_email(db, email)
+    if not user or not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+def create_user_token(user: schemas.User):
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+
+async def get_user_by_address(db: AsyncSession, address: str):
+    result = await db.execute(select(models.User).filter(models.User.web3_address == address))
+    return result.scalar_one_or_none()
+
+async def create_user_from_address(db: AsyncSession, address: str):
+    user = models.User(username=f"user_{address[:8]}", email=f"{address[:8]}@example.com", web3_address=address)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+class ProfileManager:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def update_user_profile(self, user_id: int, new_data: Dict[str, Any]) -> Dict[str, Any]:
+        user = await get_user(self.db, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        for key, value in new_data.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid field: {key}")
+        
+        try:
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        
+        return user.dict()
+
+    async def get_user_profile(self, user_id: int) -> Dict[str, Any]:
+        user = await get_user(self.db, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user.dict()

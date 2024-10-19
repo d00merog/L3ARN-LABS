@@ -1,45 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import api from '../../utils/api';
+import React from 'react';
+import { Box, Typography, LinearProgress } from '@mui/material';
+import { motion } from 'framer-motion';
 
 interface CourseProgressProps {
-  courseId: number;
-  userId: number;
+  completedLessons: number;
+  totalLessons: number;
 }
 
-const CourseProgress: React.FC<CourseProgressProps> = ({ courseId, userId }) => {
-  const [progress, setProgress] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const fetchProgress = async () => {
-      try {
-        const response = await api.get(`/courses/${courseId}/progress/${userId}`);
-        setProgress(response.data.progress);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching course progress:', error);
-        setIsLoading(false);
-      }
-    };
-
-    fetchProgress();
-  }, [courseId, userId]);
-
-  if (isLoading) {
-    return <div>Loading progress...</div>;
-  }
+const CourseProgress: React.FC<CourseProgressProps> = ({ completedLessons, totalLessons }) => {
+  const progress = (completedLessons / totalLessons) * 100;
 
   return (
-    <div className="mt-4">
-      <h3 className="text-lg font-semibold mb-2">Course Progress</h3>
-      <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-        <div
-          className="bg-blue-600 h-2.5 rounded-full"
-          style={{ width: `${progress}%` }}
-        ></div>
-      </div>
-      <p className="mt-2">{progress}% complete</p>
-    </div>
+    <Box sx={{ width: '100%', mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          Course Progress
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {completedLessons} / {totalLessons} lessons completed
+        </Typography>
+      </Box>
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: '100%' }}
+        transition={{ duration: 0.5 }}
+      >
+        <LinearProgress variant="determinate" value={progress} />
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {Math.round(progress)}% Complete
+        </Typography>
+      </motion.div>
+    </Box>
   );
 };
 

@@ -1,6 +1,7 @@
 from ..ai_models.model_selector import ModelSelector
 from ..utils.brave_search import search_missing_info
-from ..utils.code_executor import execute_code
+from ..utils.code_execution import execute_code
+from ..utils.simulation_generator import generate_simulation
 
 class TechTeacherAgent:
     def __init__(self, model_name: str = "claude"):
@@ -19,7 +20,7 @@ class TechTeacherAgent:
         9. The importance of this concept in the field of technology
         10. Potential future implications or areas of further development
         11. Any relevant programming languages, frameworks, or tools associated with the concept
-        12. Ethical considerations or societal impacts of the technology
+        12. Ethical considerationas or societal impacts of the technology
         13. Resources for further learning (books, courses, websites)
         Ensure the explanation is accessible to a general audience while maintaining technical accuracy."""
         response = await self.model.generate_response(prompt)
@@ -127,3 +128,14 @@ class TechTeacherAgent:
         10. Links to relevant research papers or industry reports
         Ensure the roadmap is informative, visually appealing, and suitable for web presentation."""
         return await self.model.generate_response(prompt)
+
+    async def generate_lesson(self, topic, difficulty):
+        # Generate a technology-related lesson
+        simulation = generate_simulation(topic, difficulty)
+        lesson_content = f"Technology lesson on {topic}:\n\n{simulation}"
+        return lesson_content
+
+    async def evaluate_code(self, code, language):
+        # Evaluate student-submitted code
+        result = await execute_code(code, language)
+        return f"Code execution result:\n{result}"

@@ -1,134 +1,208 @@
 import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
 import Layout from '@/components/layout';
-import { useAuth } from '@/context/auth-context';
-import api from '@/utils/api';
-import Button from '@/components/common/button';
+import { Typography, Box, TextField, Button, Avatar, Grid, Paper, CircularProgress, Snackbar, Alert, Tabs, Tab } from '@mui/material';
+import { getUserProfile, updateUserProfile, getUserAchievements, getUserLevel } from '@/utils/api';
+import UserAchievements from '@/components/user/UserAchievements';
+import UserLevel from '@/components/user/UserLevel';
 
 interface UserProfile {
-  id: number;
-  username: string;
+  id: string;
+  name: string;
   email: string;
-  full_name: string;
+  bio: string;
+  interests: string[];
+}
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
 }
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [achievements, setAchievements] = useState([]);
+  const [userLevel, setUserLevel] = useState({ level: 1, xp: 0, xpToNextLevel: 100 });
   const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<Partial<UserProfile>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (user?.id) {
-        try {
-          const response = await api.get<UserProfile>(`/users/${user.id}`);
-          setProfile(response.data);
-        } catch (error) {
-          setError('Error fetching user profile. Please try again later.');
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setIsLoading(false);
-      }
-    };
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    } else if (status === 'authenticated' && session?.user?.email) {
+      fetchUserProfile(session.user.email);
+      fetchUserAchievements(session.user.email);
+      fetchUserLevel(session.user.email);
+    }
+  }, [status, session, router]);
 
-    fetchProfile();
-  }, [user]);
-
-  const handleEdit = () => {
-    setIsEditing(true);
-    setEditedProfile({ ...profile });
-  };
-
-  const handleSave = async () => {
-    if (!user?.id) return;
-
+  const fetchUserProfile = async (email: string) => {
     try {
-      const response = await api.put<UserProfile>(`/users/${user.id}`, editedProfile);
-      setProfile(response.data);
-      setIsEditing(false);
-      setError(null);
+      const userProfile = await getUserProfile(email);
+      setProfile(userProfile);
     } catch (error) {
-      setError('Error updating user profile. Please try again.');
+      console.error('Error fetching user profile:', error);
+      setSnackbar({ open: true, message: 'Failed to load profile. Please try again.', severity: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setEditedProfile((prev: Partial<UserProfile>) => ({ ...prev, [name]: value }));
+  const fetchUserAchievements = async (email: string) => {
+    try {
+      const userAchievements = await getUserAchievements(email);
+      setAchievements(userAchievements);
+    } catch (error) {
+      console.error('Error fetching user achievements:', error);
+    }
   };
 
-  if (isLoading) {
-    return <Layout title="Profile | Education Platform"><div>Loading profile...</div></Layout>;
-  }
+  const fetchUserLevel = async (email: string) => {
+    try {
+      const level = await getUserLevel(email);
+      setUserLevel(level);
+    } catch (error) {
+      console.error('Error fetching user level:', error);
+    }
+  };
 
-  if (error) {
-    return <Layout title="Profile | Education Platform"><div className="text-red-500">{error}</div></Layout>;
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (profile && session?.user?.email) {
+      try {
+        await updateUserProfile(session.user.email, profile);
+        setIsEditing(false);
+        setSnackbar({ open: true, message: 'Profile updated successfully!', severity: 'success' });
+      } catch (error) {
+        console.error('Error updating user profile:', error);
+        setSnackbar({ open: true, message: 'Failed to update profile. Please try again.', severity: 'error' });
+      }
+    }
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  if (status === 'loading' || isLoading) {
+    return (
+      <Layout title="Profile | AI-Powered Learning Platform">
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+          <CircularProgress />
+        </Box>
+      </Layout>
+    );
   }
 
   if (!profile) {
-    return <Layout title="Profile | Education Platform"><div>No profile data available.</div></Layout>;
+    return <Layout title="Profile | AI-Powered Learning Platform">Profile not found</Layout>;
   }
 
   return (
-    <Layout title="Profile | Education Platform">
-      <h1 className="text-3xl font-bold mb-6">User Profile</h1>
-      <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-        {isEditing ? (
-          <>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="username">
-                Username
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="username"
-                type="text"
-                name="username"
-                value={editedProfile.username || ''}
-                onChange={handleChange}
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-                Email
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="email"
-                type="email"
-                name="email"
-                value={editedProfile.email || ''}
-                onChange={handleChange}
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="full_name">
-                Full Name
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                id="full_name"
-                type="text"
-                name="full_name"
-                value={editedProfile.full_name || ''}
-                onChange={handleChange}
-              />
-            </div>
-            <Button onClick={handleSave}>Save</Button>
-          </>
-        ) : (
-          <>
-            <p className="mb-2"><strong>Username:</strong> {profile.username}</p>
-            <p className="mb-2"><strong>Email:</strong> {profile.email}</p>
-            <p className="mb-2"><strong>Full Name:</strong> {profile.full_name}</p>
-            <Button onClick={handleEdit}>Edit Profile</Button>
-          </>
-        )}
-      </div>
+    <Layout title="Profile | AI-Powered Learning Platform">
+      <Paper elevation={3} sx={{ p: 4, maxWidth: 800, margin: 'auto' }}>
+        <Grid container spacing={3} alignItems="center" sx={{ mb: 4 }}>
+          <Grid item>
+            <Avatar
+              alt={profile.name}
+              src={session?.user?.image || ''}
+              sx={{ width: 100, height: 100 }}
+            />
+          </Grid>
+          <Grid item xs>
+            <Typography variant="h4" component="h1" gutterBottom>
+              {profile.name}
+            </Typography>
+            <Typography variant="body1" color="textSecondary">
+              {profile.email}
+            </Typography>
+          </Grid>
+        </Grid>
+        <UserLevel level={userLevel.level} xp={userLevel.xp} xpToNextLevel={userLevel.xpToNextLevel} />
+        <Tabs value={tabValue} onChange={handleTabChange} aria-label="profile tabs">
+          <Tab label="Profile" />
+          <Tab label="Achievements" />
+        </Tabs>
+        <TabPanel value={tabValue} index={0}>
+          <Box component="form" onSubmit={handleProfileUpdate} sx={{ mt: 4 }}>
+            <TextField
+              fullWidth
+              label="Bio"
+              multiline
+              rows={4}
+              value={profile.bio}
+              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+              disabled={!isEditing}
+              margin="normal"
+            />
+            <TextField
+              fullWidth
+              label="Interests"
+              value={profile.interests.join(', ')}
+              onChange={(e) => setProfile({ ...profile, interests: e.target.value.split(',').map(i => i.trim()) })}
+              disabled={!isEditing}
+              margin="normal"
+              helperText="Separate interests with commas"
+            />
+            {isEditing ? (
+              <Box sx={{ mt: 2 }}>
+                <Button type="submit" variant="contained" color="primary" sx={{ mr: 2 }}>
+                  Save Changes
+                </Button>
+                <Button variant="outlined" onClick={() => setIsEditing(false)}>
+                  Cancel
+                </Button>
+              </Box>
+            ) : (
+              <Button variant="contained" color="primary" onClick={() => setIsEditing(true)} sx={{ mt: 2 }}>
+                Edit Profile
+              </Button>
+            )}
+          </Box>
+        </TabPanel>
+        <TabPanel value={tabValue} index={1}>
+          <UserAchievements achievements={achievements} />
+        </TabPanel>
+      </Paper>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Layout>
   );
 };

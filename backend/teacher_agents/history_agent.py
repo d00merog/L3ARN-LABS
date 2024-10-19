@@ -1,6 +1,5 @@
 from ..ai_models.model_selector import ModelSelector
-from ..utils.brave_search import search_missing_info
-from ..utils.web_scraper import scrape_historical_sources
+from ..utils import brave_search, web_scraper, text_to_speech
 from .base_agent import BaseTeacherAgent
 
 class HistoryTeacher(BaseTeacherAgent):
@@ -22,4 +21,12 @@ class HistoryTeacher(BaseTeacherAgent):
 
     async def provide_historical_context(self, event: str, era: str) -> str:
         prompt = f"Provide historical context for the event '{event}' during the {era} era."
-        return await self.generate_content(prompt)
+        context = await self.generate_content(prompt)
+        additional_info = await brave_search.search_missing_info(f"{event} {era}")
+        full_context = f"{context}\n\nAdditional information:\n{additional_info}"
+        return full_context
+
+    async def create_audio_lesson(self, topic: str, era: str) -> str:
+        lesson = await self.generate_lesson(topic, era)
+        audio_file = await text_to_speech.generate_audio(lesson, "en")
+        return audio_file

@@ -1,7 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from ...core.database import Base
-
 from datetime import datetime
 
 class Course(Base):
@@ -16,17 +15,22 @@ class Course(Base):
     era = Column(String, nullable=True)
     model = Column(String)
     content = Column(Text)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    instructor_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    user = relationship("User", back_populates="courses")
     lessons = relationship("Lesson", back_populates="course")
+    instructor = relationship("User", back_populates="courses")
 
 class Lesson(Base):
     __tablename__ = "lessons"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(100), index=True, nullable=False)
-    content = Column(String(1000))
-    course_id = Column(Integer, ForeignKey('courses.id'))
+    title = Column(String, index=True)
+    description = Column(String)
+    content = Column(Text)
+    order = Column(Integer)
+    difficulty = Column(String)
+    course_id = Column(Integer, ForeignKey("courses.id"))
 
     course = relationship("Course", back_populates="lessons")

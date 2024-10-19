@@ -1,6 +1,5 @@
 from ..ai_models.model_selector import ModelSelector
-from ..utils.brave_search import search_missing_info
-from ..utils.simulation_generator import create_simulation
+from ..utils import brave_search, simulation_generator, web_scraper
 
 class ScienceTeacherAgent:
     def __init__(self, model_name: str = "claude"):
@@ -21,7 +20,7 @@ class ScienceTeacherAgent:
         Ensure the question is challenging but appropriate for the specified difficulty level, and promotes scientific thinking and curiosity."""
         response = await self.model.generate_response(prompt)
         if not response or "I don't have enough information" in response:
-            additional_info = await search_missing_info(topic)
+            additional_info = await brave_search.search_missing_info(topic)
             prompt += f"\n\nAdditional context: {additional_info}"
             response = await self.model.generate_response(prompt)
         return response
@@ -96,7 +95,7 @@ class ScienceTeacherAgent:
         return await self.model.generate_response(prompt)
 
     async def generate_simulation(self, phenomenon: str):
-        simulation_data = await create_simulation(phenomenon)
+        simulation_data = await simulation_generator.generate_simulation(phenomenon)
         return simulation_data
 
     async def create_science_infographic(self, topic: str):
@@ -112,4 +111,6 @@ class ScienceTeacherAgent:
         9. Citations or links to further resources
         10. Ideas for making the infographic shareable on social media
         Ensure the infographic is informative, visually appealing, and optimized for web viewing."""
-        return await self.model.generate_response(prompt)
+        infographic_content = await self.model.generate_response(prompt)
+        additional_info = await web_scraper.scrape_webpage(f"https://en.wikipedia.org/wiki/{topic.replace(' ', '_')}")
+        return {"content": infographic_content, "additional_info": additional_info}

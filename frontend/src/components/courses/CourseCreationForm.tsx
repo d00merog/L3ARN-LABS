@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { createCourse } from '../../api/courses';
-import Button from '../common/button';
+import { useForm, Controller, FieldValues } from 'react-hook-form';
+import { createCourse } from '@/api/courses';
+import { TextField, Button, Select, MenuItem, FormControl, InputLabel, Box, Typography, Snackbar } from '@mui/material';
+import { Alert } from '@mui/material';
+import { useRouter } from 'next/router';
 
 type CourseFormData = {
   title: string;
@@ -14,72 +16,177 @@ type CourseFormData = {
 };
 
 const CourseCreationForm: React.FC = () => {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<CourseFormData>();
+  const { control, handleSubmit, watch, formState: { errors } } = useForm<CourseFormData>();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
   const courseType = watch('type');
+  const router = useRouter();
 
   const onSubmit = async (data: CourseFormData) => {
     setIsLoading(true);
-    setError(null);
     try {
       await createCourse(data);
-      // Handle success (e.g., show a success message, redirect)
+      setSnackbar({ open: true, message: 'Course created successfully!', severity: 'success' });
+      setTimeout(() => {
+        router.push('/courses');
+      }, 2000);
     } catch (error) {
-      setError('Failed to create course. Please try again.');
+      setSnackbar({ open: true, message: 'Failed to create course. Please try again.', severity: 'error' });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <input {...register('title', { required: 'Title is required' })} placeholder="Course Title" className="w-full p-2 border rounded" />
-      {errors.title && <span className="text-red-500">{errors.title.message}</span>}
-      
-      <textarea {...register('description', { required: 'Description is required' })} placeholder="Course Description" className="w-full p-2 border rounded" />
-      {errors.description && <span className="text-red-500">{errors.description.message}</span>}
-      
-      <select {...register('type', { required: 'Type is required' })} className="w-full p-2 border rounded">
-        <option value="">Select Type</option>
-        <option value="language">Language</option>
-        <option value="history">History</option>
-      </select>
-      {errors.type && <span className="text-red-500">{errors.type.message}</span>}
-      
-      <input {...register('topic', { required: 'Topic is required' })} placeholder="Topic" className="w-full p-2 border rounded" />
-      {errors.topic && <span className="text-red-500">{errors.topic.message}</span>}
-      
+    <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ maxWidth: 600, margin: 'auto' }}>
+      <Typography variant="h4" component="h2" gutterBottom>
+        Create a New Course
+      </Typography>
+      <Controller
+        name="title"
+        control={control}
+        rules={{ required: 'Title is required' }}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            label="Course Title"
+            fullWidth
+            margin="normal"
+            error={!!errors.title}
+            helperText={errors.title?.message}
+          />
+        )}
+      />
+      <Controller
+        name="description"
+        control={control}
+        rules={{ required: 'Description is required' }}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            label="Course Description"
+            fullWidth
+            multiline
+            rows={4}
+            margin="normal"
+            error={!!errors.description}
+            helperText={errors.description?.message}
+          />
+        )}
+      />
+      <Controller
+        name="type"
+        control={control}
+        rules={{ required: 'Type is required' }}
+        render={({ field }) => (
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Course Type</InputLabel>
+            <Select
+              {...field}
+              error={!!errors.type}
+            >
+              <MenuItem value="language">Language</MenuItem>
+              <MenuItem value="history">History</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+      />
+      <Controller
+        name="topic"
+        control={control}
+        rules={{ required: 'Topic is required' }}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            label="Topic"
+            fullWidth
+            margin="normal"
+            error={!!errors.topic}
+            helperText={errors.topic?.message}
+          />
+        )}
+      />
       {courseType === 'language' && (
-        <select {...register('difficulty', { required: 'Difficulty is required for language courses' })} className="w-full p-2 border rounded">
-          <option value="">Select Difficulty</option>
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="advanced">Advanced</option>
-        </select>
+        <Controller
+          name="difficulty"
+          control={control}
+          rules={{ required: 'Difficulty is required for language courses' }}
+          render={({ field }) => (
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Difficulty</InputLabel>
+              <Select
+                {...field}
+                error={!!errors.difficulty}
+              >
+                <MenuItem value="beginner">Beginner</MenuItem>
+                <MenuItem value="intermediate">Intermediate</MenuItem>
+                <MenuItem value="advanced">Advanced</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+        />
       )}
-      {errors.difficulty && <span className="text-red-500">{errors.difficulty.message}</span>}
-      
       {courseType === 'history' && (
-        <input {...register('era', { required: 'Era is required for history courses' })} placeholder="Historical Era" className="w-full p-2 border rounded" />
+        <Controller
+          name="era"
+          control={control}
+          rules={{ required: 'Era is required for history courses' }}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Historical Era"
+              fullWidth
+              margin="normal"
+              error={!!errors.era}
+              helperText={errors.era?.message}
+            />
+          )}
+        />
       )}
-      {errors.era && <span className="text-red-500">{errors.era.message}</span>}
-      
-      <select {...register('model', { required: 'Model is required' })} className="w-full p-2 border rounded">
-        <option value="">Select Model</option>
-        <option value="claude">Claude</option>
-        <option value="openai">OpenAI</option>
-        <option value="huggingface">HuggingFace</option>
-        <option value="local">Local Model</option>
-      </select>
-      {errors.model && <span className="text-red-500">{errors.model.message}</span>}
-      
-      {error && <div className="text-red-500">{error}</div>}
-      
-      <Button type="submit" disabled={isLoading} className="w-full">
+      <Controller
+        name="model"
+        control={control}
+        rules={{ required: 'Model is required' }}
+        render={({ field }) => (
+          <FormControl fullWidth margin="normal">
+            <InputLabel>AI Model</InputLabel>
+            <Select
+              {...field}
+              error={!!errors.model}
+            >
+              <MenuItem value="claude">Claude</MenuItem>
+              <MenuItem value="openai">OpenAI</MenuItem>
+              <MenuItem value="huggingface">HuggingFace</MenuItem>
+              <MenuItem value="local">Local Model</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+      />
+      <Button
+        type="submit"
+        variant="contained"
+        color="primary"
+        fullWidth
+        size="large"
+        disabled={isLoading}
+        sx={{ mt: 2 }}
+      >
         {isLoading ? 'Creating...' : 'Create Course'}
       </Button>
-    </form>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 };
 

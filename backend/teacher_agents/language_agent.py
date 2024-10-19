@@ -1,7 +1,7 @@
 from backend.ai_models.model_selector import ModelSelector
-from ..utils.brave_search import search_missing_info
-from ..utils.text_to_speech import generate_audio
-from ..utils.speech_recognition import transcribe_audio
+from backend.utils.brave_search import search_missing_info
+from backend.utils import text_to_speech
+from backend.utils import speech_recognition
 
 class LanguageTeacher:
     def __init__(self, model_name: str):
@@ -61,11 +61,11 @@ class LanguageTeacher:
         return await self.model.generate_response(prompt)
 
     async def generate_audio_lesson(self, text: str, language: str):
-        audio_file = await generate_audio(text, language)
+        audio_file = await text_to_speech.generate_audio(text, language)
         return audio_file
 
     async def transcribe_student_response(self, audio_file: str, language: str):
-        transcription = await transcribe_audio(audio_file, language)
+        transcription = await speech_recognition.transcribe_audio(audio_file, language)
         return transcription
 
     async def create_language_game(self, game_type: str, language: str, difficulty: str):

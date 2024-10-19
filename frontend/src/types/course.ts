@@ -1,3 +1,13 @@
+export interface Lesson {
+  id: number;
+  title: string;
+  description: string;
+  content: string;
+  order: number;
+  difficulty: string;
+  course_id: number;
+}
+
 export interface Course {
   id: number;
   title: string;
@@ -7,7 +17,7 @@ export interface Course {
   difficulty?: string;
   era?: string;
   model: string;
-  user_id: number;
+  instructor_id: number;
   created_at: string;
   updated_at: string;
 }

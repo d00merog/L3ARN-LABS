@@ -1,49 +1,50 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useSession } from 'next-auth/react';
 
 interface User {
-  id: string
-  email: string
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
 }
 
 interface AuthContextType {
-  user: User | null
-  login: (userData: User) => void
-  logout: () => void
+  user: User | null;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const { data: session, status } = useSession();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    if (status === 'loading') {
+      setLoading(true);
+    } else if (status === 'authenticated' && session?.user) {
+      setUser({
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image
+      });
+      setLoading(false);
+    } else {
+      setUser(null);
+      setLoading(false);
     }
-  }, [])
-
-  const login = (userData: User) => {
-    setUser(userData)
-    localStorage.setItem('user', JSON.stringify(userData))
-  }
-
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem('user')
-  }
+  }, [session, status]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, loading }}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext);

@@ -1,8 +1,10 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import api from '../utils/api';
+import { useRouter } from 'next/router';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 interface User {
-  id: number;
+  id: string;
   username: string;
   email: string;
   full_name: string;
@@ -22,17 +24,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     const checkAuthStatus = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
+      if (status === 'authenticated' && session?.user?.email) {
         try {
           const response = await api.get('/users/me');
           setUser(response.data);
         } catch (err) {
           console.error('Error fetching user data:', err);
-          localStorage.removeItem('token');
           setError('Session expired. Please log in again.');
         }
       }
@@ -40,15 +42,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkAuthStatus();
-  }, []);
+  }, [status, session]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.post('/auth/token', { email, password });
-      localStorage.setItem('token', response.data.access_token);
-      setUser(response.data.user);
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      });
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        const response = await api.get('/users/me');
+        setUser(response.data);
+        router.push('/dashboard');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError('Invalid email or password. Please try again.');
@@ -60,12 +71,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     try {
-      await api.post('/auth/logout');
+      await signOut({ redirect: false });
+      setUser(null);
+      router.push('/');
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      localStorage.removeItem('token');
-      setUser(null);
       setIsLoading(false);
     }
   };

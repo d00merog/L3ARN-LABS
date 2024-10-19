@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from ...core.database import get_db
-from ..auth.crud import get_current_user
+from ..auth import crud as auth_crud
 from . import schemas, crud
 
 router = APIRouter()
@@ -11,7 +11,7 @@ router = APIRouter()
 async def get_course_analytics(
     course_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(get_current_user)
+    current_user: schemas.User = Depends(auth_crud.get_current_user)
 ):
     if not current_user.is_instructor:
         raise HTTPException(status_code=403, detail="Not authorized to view analytics")
@@ -20,7 +20,7 @@ async def get_course_analytics(
 @router.get("/instructor/analytics", response_model=schemas.InstructorAnalytics)
 async def get_instructor_analytics(
     db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(get_current_user)
+    current_user: schemas.User = Depends(auth_crud.get_current_user)
 ):
     if not current_user.is_instructor:
         raise HTTPException(status_code=403, detail="Not authorized to view analytics")
