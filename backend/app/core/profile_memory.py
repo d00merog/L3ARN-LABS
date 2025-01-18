@@ -1,582 +1,381 @@
-"""
-profile_memory.py
-
-This module provides the backend functionality for managing user profile storage,
-learning progress, and user preferences. It includes models, schemas, services,
-and API routes following best practices.
-
-Features:
-- User profile storage
-- Learning progress tracking
-- User preferences management
-
-Models:
-- ProfileMemory
-- LearningProgress
-- UserPreferences
-
-Architecture:
-- Repository pattern
-- Dependency injection
-- Async operations
-
-Dependencies:
-- FastAPI
-- SQLAlchemy (Async)
-- Pydantic
-- Asyncio
-- Typing
-- Datetime
-
-Usage:
-Run this module with an ASGI server (e.g., Uvicorn) to start the API service.
-"""
+# backend/app/core/profile_memory.py
 
 from typing import List, Optional
+from datetime import datetime
 import asyncio
 import logging
-from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException, APIRouter, status
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    create_async_engine,
-    async_sessionmaker,
-)
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    ForeignKey,
-    select,
-)
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, select
+
+from pydantic import BaseModel, validator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database configuration
+# SQLAlchemy base class
+Base = declarative_base()
+
+# Async database engine and session
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 
-Base = declarative_base()
-engine = create_async_engine(DATABASE_URL, echo=False)
-async_session = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
+engine = create_async_engine(
+    DATABASE_URL, echo=False
+)
 
+async_session = sessionmaker(
+    bind=engine, class_=AsyncSession, expire_on_commit=False
+)
 
-# Database Models
+# Models
+
 class ProfileMemory(Base):
     """
-    SQLAlchemy model for ProfileMemory.
+    ORM model for storing user profile memory.
 
-    Represents user's profile memory, including relationships to learning progress
-    and user preferences.
+    Attributes:
+        id (int): Primary key.
+        user_id (int): Unique identifier for the user.
+        created_at (datetime): Timestamp of creation.
+        learning_progress (LearningProgress): Associated learning progress.
+        user_preferences (UserPreferences): Associated user preferences.
     """
-
-    __tablename__ = "profile_memories"
+    __tablename__ = 'profile_memories'
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, unique=True, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-
-    learning_progress = relationship(
-        "LearningProgress", back_populates="profile_memory", uselist=False
-    )
-    user_preferences = relationship(
-        "UserPreferences", back_populates="profile_memory", uselist=False
-    )
-
-    def __repr__(self):
-        return f"<ProfileMemory(user_id={self.user_id})>"
-
+    learning_progress = relationship("LearningProgress", back_populates="profile_memory", uselist=False)
+    user_preferences = relationship("UserPreferences", back_populates="profile_memory", uselist=False)
 
 class LearningProgress(Base):
     """
-    SQLAlchemy model for LearningProgress.
+    ORM model for storing user's learning progress.
 
-    Stores the learning progress data associated with a profile memory.
+    Attributes:
+        id (int): Primary key.
+        profile_memory_id (int): Foreign key to ProfileMemory.
+        progress_data (str): JSON or text data representing progress.
+        updated_at (datetime): Timestamp of last update.
     """
-
-    __tablename__ = "learning_progresses"
+    __tablename__ = 'learning_progresses'
 
     id = Column(Integer, primary_key=True, index=True)
-    profile_memory_id = Column(Integer, ForeignKey("profile_memories.id"), unique=True)
-    progress_data = Column(String, nullable=False)
+    profile_memory_id = Column(Integer, ForeignKey('profile_memories.id'), nullable=False)
+    progress_data = Column(Text)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     profile_memory = relationship("ProfileMemory", back_populates="learning_progress")
 
-    def __repr__(self):
-        return f"<LearningProgress(profile_memory_id={self.profile_memory_id})>"
-
-
 class UserPreferences(Base):
     """
-    SQLAlchemy model for UserPreferences.
+    ORM model for storing user's preferences.
 
-    Stores the user preferences data associated with a profile memory.
+    Attributes:
+        id (int): Primary key.
+        profile_memory_id (int): Foreign key to ProfileMemory.
+        preferences_data (str): JSON or text data representing preferences.
+        updated_at (datetime): Timestamp of last update.
     """
-
-    __tablename__ = "user_preferences"
+    __tablename__ = 'user_preferences'
 
     id = Column(Integer, primary_key=True, index=True)
-    profile_memory_id = Column(Integer, ForeignKey("profile_memories.id"), unique=True)
-    preferences_data = Column(String, nullable=False)
+    profile_memory_id = Column(Integer, ForeignKey('profile_memories.id'), nullable=False)
+    preferences_data = Column(Text)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     profile_memory = relationship("ProfileMemory", back_populates="user_preferences")
 
-    def __repr__(self):
-        return f"<UserPreferences(profile_memory_id={self.profile_memory_id})>"
+# Pydantic models for validation
 
+class LearningProgressCreate(BaseModel):
+    progress_data: str
 
-# Pydantic Schemas
-class LearningProgressBase(BaseModel):
-    """
-    Base schema for LearningProgress.
-    """
+    @validator('progress_data')
+    def validate_progress_data(cls, v):
+        if not v.strip():
+            raise ValueError('progress_data cannot be empty')
+        return v
 
-    progress_data: str = Field(..., max_length=500)
+class UserPreferencesCreate(BaseModel):
+    preferences_data: str
 
+    @validator('preferences_data')
+    def validate_preferences_data(cls, v):
+        if not v.strip():
+            raise ValueError('preferences_data cannot be empty')
+        return v
 
-class LearningProgressCreate(LearningProgressBase):
-    """
-    Schema for creating LearningProgress.
-    """
-
-    pass
-
-
-class LearningProgressUpdate(LearningProgressBase):
-    """
-    Schema for updating LearningProgress.
-    """
-
-    pass
-
-
-class LearningProgressInDB(LearningProgressBase):
-    """
-    Schema representing LearningProgress in the database.
-    """
-
-    id: int
-    profile_memory_id: int
-
-    class Config:
-        orm_mode = True
-
-
-class UserPreferencesBase(BaseModel):
-    """
-    Base schema for UserPreferences.
-    """
-
-    preferences_data: str = Field(..., max_length=500)
-
-
-class UserPreferencesCreate(UserPreferencesBase):
-    """
-    Schema for creating UserPreferences.
-    """
-
-    pass
-
-
-class UserPreferencesUpdate(UserPreferencesBase):
-    """
-    Schema for updating UserPreferences.
-    """
-
-    pass
-
-
-class UserPreferencesInDB(UserPreferencesBase):
-    """
-    Schema representing UserPreferences in the database.
-    """
-
-    id: int
-    profile_memory_id: int
-
-    class Config:
-        orm_mode = True
-
-
-class ProfileMemoryBase(BaseModel):
-    """
-    Base schema for ProfileMemory.
-    """
-
+class ProfileMemoryCreate(BaseModel):
     user_id: int
-
-
-class ProfileMemoryCreate(ProfileMemoryBase):
-    """
-    Schema for creating ProfileMemory.
-    """
-
     learning_progress: Optional[LearningProgressCreate] = None
     user_preferences: Optional[UserPreferencesCreate] = None
 
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        if v <= 0:
+            raise ValueError('user_id must be positive')
+        return v
 
-class ProfileMemoryUpdate(ProfileMemoryBase):
-    """
-    Schema for updating ProfileMemory.
-    """
-
-    learning_progress: Optional[LearningProgressUpdate] = None
-    user_preferences: Optional[UserPreferencesUpdate] = None
-
-
-class ProfileMemoryInDB(ProfileMemoryBase):
-    """
-    Schema representing ProfileMemory in the database.
-    """
-
+class LearningProgressRead(BaseModel):
     id: int
-    created_at: datetime
+    progress_data: str
     updated_at: datetime
-    learning_progress: Optional[LearningProgressInDB] = None
-    user_preferences: Optional[UserPreferencesInDB] = None
 
     class Config:
         orm_mode = True
 
+class UserPreferencesRead(BaseModel):
+    id: int
+    preferences_data: str
+    updated_at: datetime
 
-# Services
-async def get_profile_memory(
-    db: AsyncSession, user_id: int
-) -> Optional[ProfileMemory]:
+    class Config:
+        orm_mode = True
+
+class ProfileMemoryRead(BaseModel):
+    id: int
+    user_id: int
+    created_at: datetime
+    learning_progress: Optional[LearningProgressRead] = None
+    user_preferences: Optional[UserPreferencesRead] = None
+
+    class Config:
+        orm_mode = True
+
+# Repository pattern for database operations
+
+class ProfileMemoryRepository:
     """
-    Retrieve a profile memory by user_id.
+    Repository for ProfileMemory operations.
 
-    Args:
-        db (AsyncSession): The database session.
-        user_id (int): The user ID.
-
-    Returns:
-        Optional[ProfileMemory]: The profile memory if found, else None.
-
-    Doctest:
-    >>> async def test_get_profile_memory():
-    ...     async with async_session() as db:
-    ...         profile = await get_profile_memory(db, user_id=1)
-    ...         assert profile is None
-    >>> asyncio.run(test_get_profile_memory())
+    Methods:
+        create_profile_memory: Create a new profile memory.
+        get_profile_memory: Retrieve a profile memory by user_id.
+        update_profile_memory: Update existing profile memory.
+        delete_profile_memory: Delete a profile memory.
     """
-    try:
-        result = await db.execute(
-            select(ProfileMemory).where(ProfileMemory.user_id == user_id)
-        )
-        profile_memory = result.scalar_one_or_none()
-        return profile_memory
-    except SQLAlchemyError as e:
-        logger.error(f"Database error retrieving profile memory for user_id {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
+    async def create_profile_memory(self, profile_data: ProfileMemoryCreate) -> ProfileMemory:
+        """
+        Create a new ProfileMemory.
 
-async def create_profile_memory(
-    db: AsyncSession, profile_data: ProfileMemoryCreate
-) -> ProfileMemory:
-    """
-    Create a new profile memory.
+        :param profile_data: Data required to create ProfileMemory
+        :return: Created ProfileMemory object
 
-    Args:
-        db (AsyncSession): The database session.
-        profile_data (ProfileMemoryCreate): The profile data.
-
-    Returns:
-        ProfileMemory: The created profile memory.
-
-    Doctest:
-    >>> async def test_create_profile_memory():
-    ...     async with async_session() as db:
-    ...         profile_data = ProfileMemoryCreate(
-    ...             user_id=1,
-    ...             learning_progress=LearningProgressCreate(progress_data="{}"),
-    ...             user_preferences=UserPreferencesCreate(preferences_data="{}")
-    ...         )
-    ...         profile = await create_profile_memory(db, profile_data)
-    ...         assert profile.id > 0
-    ...         assert profile.user_id == 1
-    >>> asyncio.run(test_create_profile_memory())
-    """
-    async with db.begin():
+        >>> import asyncio
+        >>> async def test_create():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         profile_input = ProfileMemoryCreate(
+        ...             user_id=1,
+        ...             learning_progress=LearningProgressCreate(progress_data='{"level": 1}'),
+        ...             user_preferences=UserPreferencesCreate(preferences_data='{"theme": "dark"}')
+        ...         )
+        ...         profile = await repo.create_profile_memory(profile_input)
+        ...         assert profile.user_id == 1
+        ...         await session.commit()
+        ...     await engine.dispose()
+        >>> asyncio.run(test_create())
+        """
         try:
-            profile_memory = ProfileMemory(user_id=profile_data.user_id)
-            db.add(profile_memory)
-            await db.flush()  # To get the profile_memory.id before inserting related data
+            new_profile = ProfileMemory(user_id=profile_data.user_id)
+            self.session.add(new_profile)
+            await self.session.flush()  # Ensure new_profile.id is available
 
             if profile_data.learning_progress:
-                learning_progress = LearningProgress(
-                    profile_memory_id=profile_memory.id,
-                    progress_data=profile_data.learning_progress.progress_data,
+                lp = LearningProgress(
+                    profile_memory_id=new_profile.id,
+                    progress_data=profile_data.learning_progress.progress_data
                 )
-                db.add(learning_progress)
+                self.session.add(lp)
 
             if profile_data.user_preferences:
-                user_preferences = UserPreferences(
-                    profile_memory_id=profile_memory.id,
-                    preferences_data=profile_data.user_preferences.preferences_data,
+                up = UserPreferences(
+                    profile_memory_id=new_profile.id,
+                    preferences_data=profile_data.user_preferences.preferences_data
                 )
-                db.add(user_preferences)
+                self.session.add(up)
 
-            await db.commit()
-            await db.refresh(profile_memory)
+            await self.session.commit()
+            await self.session.refresh(new_profile)
             logger.info(f"Created ProfileMemory for user_id {profile_data.user_id}")
-            return profile_memory
-        except SQLAlchemyError as e:
-            await db.rollback()
-            logger.error(f"Database error creating profile memory: {e}")
-            raise HTTPException(status_code=400, detail="Error creating profile memory")
+            return new_profile
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Failed to create ProfileMemory: {e}")
+            raise
 
+    async def get_profile_memory(self, user_id: int) -> Optional[ProfileMemory]:
+        """
+        Get ProfileMemory by user_id.
 
-async def update_profile_memory(
-    db: AsyncSession, profile_memory: ProfileMemory, profile_update: ProfileMemoryUpdate
-) -> ProfileMemory:
-    """
-    Update an existing profile memory.
+        :param user_id: User ID
+        :return: ProfileMemory object or None
 
-    Args:
-        db (AsyncSession): The database session.
-        profile_memory (ProfileMemory): The profile memory to update.
-        profile_update (ProfileMemoryUpdate): The updated profile data.
-
-    Returns:
-        ProfileMemory: The updated profile memory.
-
-    Doctest:
-    >>> async def test_update_profile_memory():
-    ...     async with async_session() as db:
-    ...         # Assume profile_memory with user_id=1 exists
-    ...         profile_memory = await get_profile_memory(db, user_id=1)
-    ...         profile_update = ProfileMemoryUpdate(
-    ...             user_id=1,
-    ...             learning_progress=LearningProgressUpdate(progress_data='{"progress": 50}'),
-    ...             user_preferences=UserPreferencesUpdate(preferences_data='{"theme": "dark"}')
-    ...         )
-    ...         updated_profile = await update_profile_memory(db, profile_memory, profile_update)
-    ...         assert updated_profile.learning_progress.progress_data == '{"progress": 50}'
-    ...         assert updated_profile.user_preferences.preferences_data == '{"theme": "dark"}'
-    >>> asyncio.run(test_update_profile_memory())
-    """
-    async with db.begin():
+        >>> import asyncio
+        >>> async def test_get():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         profile = await repo.get_profile_memory(user_id=1)
+        ...         if profile:
+        ...             assert profile.user_id == 1
+        ...     await engine.dispose()
+        >>> asyncio.run(test_get())
+        """
         try:
-            if profile_update.user_id:
-                profile_memory.user_id = profile_update.user_id
+            result = await self.session.execute(
+                select(ProfileMemory).where(ProfileMemory.user_id == user_id)
+                .options(
+                    relationship(ProfileMemory.learning_progress),
+                    relationship(ProfileMemory.user_preferences)
+                )
+            )
+            profile = result.scalars().first()
+            if profile:
+                logger.info(f"Retrieved ProfileMemory for user_id {user_id}")
+            else:
+                logger.warning(f"No ProfileMemory found for user_id {user_id}")
+            return profile
+        except Exception as e:
+            logger.error(f"Failed to retrieve ProfileMemory: {e}")
+            raise
 
-            profile_memory.updated_at = datetime.utcnow()
+    async def update_profile_memory(self, user_id: int, profile_data: ProfileMemoryCreate) -> Optional[ProfileMemory]:
+        """
+        Update an existing ProfileMemory.
 
-            if profile_update.learning_progress:
-                if profile_memory.learning_progress:
-                    profile_memory.learning_progress.progress_data = profile_update.learning_progress.progress_data
-                else:
-                    learning_progress = LearningProgress(
-                        profile_memory_id=profile_memory.id,
-                        progress_data=profile_update.learning_progress.progress_data,
-                    )
-                    db.add(learning_progress)
+        :param user_id: User ID
+        :param profile_data: Data to update
+        :return: Updated ProfileMemory object or None
 
-            if profile_update.user_preferences:
-                if profile_memory.user_preferences:
-                    profile_memory.user_preferences.preferences_data = profile_update.user_preferences.preferences_data
-                else:
-                    user_preferences = UserPreferences(
-                        profile_memory_id=profile_memory.id,
-                        preferences_data=profile_update.user_preferences.preferences_data,
-                    )
-                    db.add(user_preferences)
-
-            await db.commit()
-            await db.refresh(profile_memory)
-            logger.info(f"Updated ProfileMemory for user_id {profile_memory.user_id}")
-            return profile_memory
-        except SQLAlchemyError as e:
-            await db.rollback()
-            logger.error(f"Database error updating profile memory: {e}")
-            raise HTTPException(status_code=400, detail="Error updating profile memory")
-
-
-async def delete_profile_memory(db: AsyncSession, profile_memory: ProfileMemory):
-    """
-    Delete a profile memory.
-
-    Args:
-        db (AsyncSession): The database session.
-        profile_memory (ProfileMemory): The profile memory to delete.
-
-    Returns:
-        None
-
-    Doctest:
-    >>> async def test_delete_profile_memory():
-    ...     async with async_session() as db:
-    ...         profile_memory = await get_profile_memory(db, user_id=1)
-    ...         if profile_memory:
-    ...             await delete_profile_memory(db, profile_memory)
-    ...             profile_memory = await get_profile_memory(db, user_id=1)
-    ...             assert profile_memory is None
-    >>> asyncio.run(test_delete_profile_memory())
-    """
-    async with db.begin():
+        >>> import asyncio
+        >>> async def test_update():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         profile_input = ProfileMemoryCreate(
+        ...             user_id=1,
+        ...             learning_progress=LearningProgressCreate(progress_data='{"level": 2}'),
+        ...             user_preferences=UserPreferencesCreate(preferences_data='{"theme": "light"}')
+        ...         )
+        ...         profile = await repo.update_profile_memory(1, profile_input)
+        ...         assert profile.learning_progress.progress_data == '{"level": 2}'
+        ...         await session.commit()
+        ...     await engine.dispose()
+        >>> asyncio.run(test_update())
+        """
         try:
-            await db.delete(profile_memory)
-            await db.commit()
-            logger.info(f"Deleted ProfileMemory for user_id {profile_memory.user_id}")
-        except SQLAlchemyError as e:
-            await db.rollback()
-            logger.error(f"Database error deleting profile memory: {e}")
-            raise HTTPException(status_code=400, detail="Error deleting profile memory")
+            profile = await self.get_profile_memory(user_id)
+            if not profile:
+                logger.warning(f"No ProfileMemory found for user_id {user_id}")
+                return None
 
+            if profile_data.learning_progress:
+                if profile.learning_progress:
+                    profile.learning_progress.progress_data = profile_data.learning_progress.progress_data
+                else:
+                    lp = LearningProgress(
+                        profile_memory_id=profile.id,
+                        progress_data=profile_data.learning_progress.progress_data
+                    )
+                    self.session.add(lp)
 
-# Dependency Injection
-async def get_db() -> AsyncSession:
+            if profile_data.user_preferences:
+                if profile.user_preferences:
+                    profile.user_preferences.preferences_data = profile_data.user_preferences.preferences_data
+                else:
+                    up = UserPreferences(
+                        profile_memory_id=profile.id,
+                        preferences_data=profile_data.user_preferences.preferences_data
+                    )
+                    self.session.add(up)
+
+            await self.session.commit()
+            await self.session.refresh(profile)
+            logger.info(f"Updated ProfileMemory for user_id {user_id}")
+            return profile
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Failed to update ProfileMemory: {e}")
+            raise
+
+    async def delete_profile_memory(self, user_id: int) -> bool:
+        """
+        Delete a ProfileMemory by user_id.
+
+        :param user_id: User ID
+        :return: True if deleted, False otherwise
+
+        >>> import asyncio
+        >>> async def test_delete():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         success = await repo.delete_profile_memory(1)
+        ...         assert success is True
+        ...         await session.commit()
+        ...     await engine.dispose()
+        >>> asyncio.run(test_delete())
+        """
+        try:
+            profile = await self.get_profile_memory(user_id)
+            if not profile:
+                logger.warning(f"No ProfileMemory found for user_id {user_id}")
+                return False
+
+            await self.session.delete(profile)
+            await self.session.commit()
+            logger.info(f"Deleted ProfileMemory for user_id {user_id}")
+            return True
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Failed to delete ProfileMemory: {e}")
+            raise
+
+# Asynchronous initialization function to create tables (for testing purposes)
+async def init_models():
     """
-    Dependency to get an async database session.
-    """
-    async with async_session() as session:
-        yield session
+    Initialize database models.
 
-
-# FastAPI Application and Routes
-app = FastAPI(title="Profile Memory Service", version="1.0.0")
-router = APIRouter()
-
-
-@router.post(
-    "/profile_memory/",
-    response_model=ProfileMemoryInDB,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new profile memory",
-    tags=["ProfileMemory"],
-)
-async def create_profile(
-    profile: ProfileMemoryCreate, db: AsyncSession = Depends(get_db)
-):
-    """
-    Create a new profile memory for a user.
-
-    Args:
-        profile (ProfileMemoryCreate): The profile data.
-        db (AsyncSession): The database session.
-
-    Returns:
-        ProfileMemoryInDB: The created profile memory.
-    """
-    existing_profile = await get_profile_memory(db, profile.user_id)
-    if existing_profile:
-        raise HTTPException(status_code=400, detail="Profile already exists")
-
-    profile_memory = await create_profile_memory(db, profile)
-    return profile_memory
-
-
-@router.get(
-    "/profile_memory/{user_id}",
-    response_model=ProfileMemoryInDB,
-    summary="Retrieve a profile memory",
-    tags=["ProfileMemory"],
-)
-async def read_profile(user_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Retrieve a profile memory by user ID.
-
-    Args:
-        user_id (int): The user ID.
-        db (AsyncSession): The database session.
-
-    Returns:
-        ProfileMemoryInDB: The retrieved profile memory.
-    """
-    profile_memory = await get_profile_memory(db, user_id)
-    if not profile_memory:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return profile_memory
-
-
-@router.put(
-    "/profile_memory/{user_id}",
-    response_model=ProfileMemoryInDB,
-    summary="Update a profile memory",
-    tags=["ProfileMemory"],
-)
-async def update_profile(
-    user_id: int, profile_update: ProfileMemoryUpdate, db: AsyncSession = Depends(get_db)
-):
-    """
-    Update an existing profile memory by user ID.
-
-    Args:
-        user_id (int): The user ID.
-        profile_update (ProfileMemoryUpdate): The updated profile data.
-        db (AsyncSession): The database session.
-
-    Returns:
-        ProfileMemoryInDB: The updated profile memory.
-    """
-    profile_memory = await get_profile_memory(db, user_id)
-    if not profile_memory:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    updated_profile = await update_profile_memory(db, profile_memory, profile_update)
-    return updated_profile
-
-
-@router.delete(
-    "/profile_memory/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a profile memory",
-    tags=["ProfileMemory"],
-)
-async def delete_profile(user_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Delete a profile memory by user ID.
-
-    Args:
-        user_id (int): The user ID.
-        db (AsyncSession): The database session.
-
-    Returns:
-        None
-    """
-    profile_memory = await get_profile_memory(db, user_id)
-    if not profile_memory:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    await delete_profile_memory(db, profile_memory)
-    return None
-
-
-app.include_router(router)
-
-
-# Event Handlers
-@app.on_event("startup")
-async def startup():
-    """
-    Event handler for startup.
-
-    Initializes the database tables.
+    >>> import asyncio
+    >>> async def test_init_models():
+    ...     await init_models()
+    ...     # Check if tables are created (this is just an example)
+    ...     assert True
+    ...     await engine.dispose()
+    >>> asyncio.run(test_init_models())
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables created")
+    logger.info("Initialized database models.")
 
+# Example usage (can be removed in production)
 
-@app.on_event("shutdown")
-async def shutdown():
-    """
-    Event handler for shutdown.
-
-    Disposes the database engine.
-    """
-    await engine.dispose()
-    logger.info("Database connection closed")
-
-
-# Main entry point
 if __name__ == "__main__":
-    import uvicorn
+    async def main():
+        await init_models()
 
-    uvicorn.run("profile_memory:app", host="0.0.0.0", port=8000, reload=True)
+        # Create a profile memory
+        async with async_session() as session:
+            repo = ProfileMemoryRepository(session)
+            profile_input = ProfileMemoryCreate(
+                user_id=1,
+                learning_progress=LearningProgressCreate(progress_data='{"level": 1}'),
+                user_preferences=UserPreferencesCreate(preferences_data='{"theme": "dark"}')
+            )
+            profile = await repo.create_profile_memory(profile_input)
+            print("Created ProfileMemory:", ProfileMemoryRead.from_orm(profile))
+
+        # Get the profile memory
+        async with async_session() as session:
+            repo = ProfileMemoryRepository(session)
+            profile = await repo.get_profile_memory(user_id=1)
+            if profile:
+                print("Retrieved ProfileMemory:", ProfileMemoryRead.from_orm(profile))
+            else:
+                print("ProfileMemory not found.")
+
+    asyncio.run(main())
