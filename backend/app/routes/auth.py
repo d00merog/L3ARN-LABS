@@ -11,7 +11,8 @@ from typing import Optional
 from ..core import settings
 from ..database import get_db
 from ..models.user import User
-from ..schemas.auth import Token, TokenData, UserCreate, UserLogin
+from ..schemas.auth import Token, TokenData, UserLogin
+from ..schemas.user import UserCreate
 from ..services.auth import (
     get_password_hash,
     verify_password,
@@ -29,6 +30,9 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """Register a new user"""
+    # Validate passwords match
+    user_data.validate_passwords()
+    
     # Check if user exists
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(
