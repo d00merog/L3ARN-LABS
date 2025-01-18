@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import logging
+from datetime import datetime
 
 from .database import get_db, init_db
 from .routes import auth, users, courses, lessons
