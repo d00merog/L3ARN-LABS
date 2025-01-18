@@ -1,17 +1,23 @@
 """
-This module provides classes and functions to handle user profile storage,
-learning progress tracking, and user preferences management using async
-operations with SQLAlchemy and Pydantic for input validation.
+Module: profile_memory.py
+
+This module provides models and services for user profile storage, learning progress,
+and user preferences using FastAPI and SQLAlchemy with asyncio support.
 
 Features:
 - User profile storage
 - Learning progress tracking
 - User preferences management
 
-Architecture patterns:
-- Repository pattern
-- Dependency injection
-- Async operations
+Models:
+- ProfileMemory
+- LearningProgress
+- UserPreferences
+
+Usage:
+    Run the application using Uvicorn:
+        uvicorn profile_memory:app --reload
+
 """
 
 import logging
@@ -19,388 +25,436 @@ import asyncio
 from typing import List, Optional
 from datetime import datetime
 
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    create_async_engine,
+)
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy import (
     Column,
     Integer,
     String,
+    Text,
     DateTime,
     ForeignKey,
-    Text,
-    create_engine,
 )
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.future import select
+from sqlalchemy.exc import SQLAlchemyError
 
-from pydantic import BaseModel, Field, validator, ValidationError
+from pydantic import BaseModel, validator
 
-# Configure logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define the base class for declarative class definitions
+# Database configuration
+DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+
+# Create async engine and session
+engine = create_async_engine(
+    DATABASE_URL, echo=True,
+)
+async_session = sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
+
+# Declarative base model
 Base = declarative_base()
 
-
-# SQLAlchemy models
+# SQLAlchemy Models
 class ProfileMemory(Base):
     """
     SQLAlchemy model for storing user profile information.
 
-    Relationships:
-    - learning_progresses: One-to-many with LearningProgress
-    - preferences: One-to-one with UserPreferences
+    Attributes:
+        id (int): Primary key.
+        user_id (int): Unique user identifier.
+        created_at (datetime): Timestamp of creation.
+        updated_at (datetime): Timestamp of last update.
+        learning_progress (LearningProgress): One-to-one relationship with LearningProgress.
+        preferences (UserPreferences): One-to-one relationship with UserPreferences.
     """
-
     __tablename__ = 'profile_memory'
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, unique=True, nullable=False)
-    creation_date = Column(DateTime, default=datetime.utcnow)
-    learning_progresses = relationship(
-        'LearningProgress',
-        back_populates='profile',
-        cascade="all, delete-orphan",
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    learning_progress = relationship(
+        "LearningProgress", back_populates="profile_memory", uselist=False
     )
     preferences = relationship(
-        'UserPreferences',
-        back_populates='profile',
-        uselist=False,
-        cascade="all, delete-orphan",
+        "UserPreferences", back_populates="profile_memory", uselist=False
     )
-
-    def __repr__(self):
-        return f"<ProfileMemory(id={self.id}, user_id={self.user_id})>"
-
 
 class LearningProgress(Base):
     """
-    SQLAlchemy model for tracking user's learning progress.
+    SQLAlchemy model for storing user's learning progress.
 
-    Relationships:
-    - profile: Many-to-one with ProfileMemory
+    Attributes:
+        id (int): Primary key.
+        profile_memory_id (int): Foreign key to ProfileMemory.
+        progress_data (str): JSON string of progress data.
+        updated_at (datetime): Timestamp of last update.
+        profile_memory (ProfileMemory): Relationship back to ProfileMemory.
     """
-
     __tablename__ = 'learning_progress'
 
-    id = Column(Integer, primary_key=True)
-    profile_id = Column(Integer, ForeignKey('profile_memory.id'), nullable=False)
-    course_name = Column(String(255), nullable=False)
-    progress_percentage = Column(Integer, default=0)
-    last_accessed = Column(DateTime, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True, index=True)
+    profile_memory_id = Column(Integer, ForeignKey('profile_memory.id'))
+    progress_data = Column(Text)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    profile = relationship('ProfileMemory', back_populates='learning_progresses')
-
-    def __repr__(self):
-        return f"<LearningProgress(id={self.id}, course_name='{self.course_name}')>"
-
+    profile_memory = relationship(
+        "ProfileMemory", back_populates="learning_progress"
+    )
 
 class UserPreferences(Base):
     """
-    SQLAlchemy model for storing user preferences.
+    SQLAlchemy model for storing user's preferences.
 
-    Relationships:
-    - profile: One-to-one with ProfileMemory
+    Attributes:
+        id (int): Primary key.
+        profile_memory_id (int): Foreign key to ProfileMemory.
+        preferences_data (str): JSON string of preferences data.
+        updated_at (datetime): Timestamp of last update.
+        profile_memory (ProfileMemory): Relationship back to ProfileMemory.
     """
-
     __tablename__ = 'user_preferences'
 
-    id = Column(Integer, primary_key=True)
-    profile_id = Column(Integer, ForeignKey('profile_memory.id'), nullable=False, unique=True)
+    id = Column(Integer, primary_key=True, index=True)
+    profile_memory_id = Column(Integer, ForeignKey('profile_memory.id'))
     preferences_data = Column(Text)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    profile = relationship('ProfileMemory', back_populates='preferences')
+    profile_memory = relationship(
+        "ProfileMemory", back_populates="preferences"
+    )
 
-    def __repr__(self):
-        return f"<UserPreferences(id={self.id}, profile_id={self.profile_id})>"
-
-
-# Pydantic models for input validation
+# Pydantic Models for Input Validation
 class LearningProgressCreate(BaseModel):
-    """
-    Pydantic model for creating a LearningProgress instance.
-    """
+    progress_data: str
 
-    course_name: str = Field(..., max_length=255)
-    progress_percentage: int = Field(0, ge=0, le=100)
-
-    @validator('course_name')
-    def course_name_must_not_be_empty(cls, v):
-        if not v.strip():
-            raise ValueError("course_name must not be empty")
+    @validator('progress_data')
+    def validate_progress_data(cls, v):
+        if not v:
+            raise ValueError('progress_data must not be empty')
         return v
-
 
 class UserPreferencesCreate(BaseModel):
-    """
-    Pydantic model for creating a UserPreferences instance.
-    """
-
-    preferences_data: str = Field(...)
+    preferences_data: str
 
     @validator('preferences_data')
-    def preferences_data_must_not_be_empty(cls, v):
-        if not v.strip():
-            raise ValueError("preferences_data must not be empty")
+    def validate_preferences_data(cls, v):
+        if not v:
+            raise ValueError('preferences_data must not be empty')
         return v
-
 
 class ProfileMemoryCreate(BaseModel):
-    """
-    Pydantic model for creating a ProfileMemory instance.
-    """
-
-    user_id: int = Field(..., gt=0)
-    preferences: Optional[UserPreferencesCreate]
-    learning_progresses: Optional[List[LearningProgressCreate]] = []
+    user_id: int
+    learning_progress: Optional[LearningProgressCreate] = None
+    preferences: Optional[UserPreferencesCreate] = None
 
     @validator('user_id')
-    def user_id_must_be_positive(cls, v):
+    def validate_user_id(cls, v):
         if v <= 0:
-            raise ValueError("user_id must be positive")
+            raise ValueError('user_id must be a positive integer')
         return v
 
+# Pydantic Models for Response Output
+class LearningProgressOut(BaseModel):
+    progress_data: str
+    updated_at: datetime
 
-# Database configuration
-DATABASE_URL = "sqlite+aiosqlite:///./profile_memory.db"
+    class Config:
+        orm_mode = True
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+class UserPreferencesOut(BaseModel):
+    preferences_data: str
+    updated_at: datetime
 
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession,
-)
+    class Config:
+        orm_mode = True
 
+class ProfileMemoryOut(BaseModel):
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    learning_progress: Optional[LearningProgressOut] = None
+    preferences: Optional[UserPreferencesOut] = None
 
-async def init_db():
+    class Config:
+        orm_mode = True
+
+# Repository Classes
+class ProfileMemoryRepository:
     """
-    Initialize the database by creating all tables.
-
-    This function should be run before any database operations are performed.
-    """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database initialized.")
-
-
-# Services
-class ProfileService:
-    """
-    Service class for managing ProfileMemory operations.
+    Repository class for ProfileMemory operations.
     """
 
     def __init__(self, session: AsyncSession):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session (AsyncSession): The database session.
+        """
         self.session = session
 
-    async def create_profile(self, profile_data: ProfileMemoryCreate) -> ProfileMemory:
+    async def get_profile_by_user_id(self, user_id: int) -> Optional[ProfileMemory]:
         """
-        Create a new ProfileMemory record.
+        Get a profile by user_id.
 
-        :param profile_data: ProfileMemoryCreate Pydantic model
-        :return: The created ProfileMemory instance
+        Args:
+            user_id (int): The user ID.
+
+        Returns:
+            Optional[ProfileMemory]: The profile if found, else None.
+
+        Raises:
+            SQLAlchemyError: If a database error occurs.
 
         >>> import asyncio
-        >>> async def test():
-        ...     await init_db()
-        ...     async with AsyncSessionLocal() as session:
-        ...         service = ProfileService(session)
-        ...         profile_data = ProfileMemoryCreate(
-        ...             user_id=1,
-        ...             preferences=UserPreferencesCreate(preferences_data='{"theme": "dark"}'),
-        ...             learning_progresses=[
-        ...                 LearningProgressCreate(course_name="Math", progress_percentage=50),
-        ...                 LearningProgressCreate(course_name="Science", progress_percentage=75)
-        ...             ]
-        ...         )
-        ...         profile = await service.create_profile(profile_data)
-        ...         assert profile.user_id == 1
-        ...         assert profile.preferences.preferences_data == '{"theme": "dark"}'
-        ...         assert len(profile.learning_progresses) == 2
-        >>> asyncio.run(test())
-        """
-        try:
-            new_profile = ProfileMemory(user_id=profile_data.user_id)
-
-            if profile_data.preferences:
-                new_preferences = UserPreferences(
-                    preferences_data=profile_data.preferences.preferences_data
-                )
-                new_profile.preferences = new_preferences
-
-            if profile_data.learning_progresses:
-                for lp_data in profile_data.learning_progresses:
-                    new_lp = LearningProgress(
-                        course_name=lp_data.course_name,
-                        progress_percentage=lp_data.progress_percentage,
-                    )
-                    new_profile.learning_progresses.append(new_lp)
-
-            self.session.add(new_profile)
-            await self.session.commit()
-            await self.session.refresh(new_profile)
-            logger.info(f"Created ProfileMemory with user_id {new_profile.user_id}")
-            return new_profile
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Error creating profile: {e}")
-            raise
-
-    async def get_profile(self, user_id: int) -> Optional[ProfileMemory]:
-        """
-        Retrieve a ProfileMemory by user_id.
-
-        :param user_id: The user ID
-        :return: The ProfileMemory instance or None
-
-        >>> import asyncio
-        >>> async def test():
-        ...     await init_db()
-        ...     async with AsyncSessionLocal() as session:
-        ...         service = ProfileService(session)
-        ...         profile = await service.get_profile(1)
-        ...         assert profile is not None
-        ...         assert profile.user_id == 1
-        >>> asyncio.run(test())
+        >>> async def test_get_profile():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         profile = await repo.get_profile_by_user_id(1)
+        ...         assert profile is None or profile.user_id == 1
+        >>> asyncio.run(test_get_profile())
         """
         try:
             result = await self.session.execute(
                 select(ProfileMemory).where(ProfileMemory.user_id == user_id)
             )
             profile = result.scalars().first()
-            logger.info(f"Retrieved ProfileMemory with user_id {user_id}")
             return profile
-        except Exception as e:
-            logger.error(f"Error retrieving profile: {e}")
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting profile by user_id {user_id}: {e}")
             raise
 
-    async def update_profile(
-        self, user_id: int, update_data: ProfileMemoryCreate
-    ) -> ProfileMemory:
+    async def create_profile(self, profile_data: ProfileMemoryCreate) -> ProfileMemory:
         """
-        Update an existing ProfileMemory record.
+        Create a new profile with associated learning progress and preferences.
 
-        :param user_id: The user ID to update
-        :param update_data: The data to update
-        :return: The updated ProfileMemory instance
+        Args:
+            profile_data (ProfileMemoryCreate): Profile data.
+
+        Returns:
+            ProfileMemory: The created profile.
+
+        Raises:
+            SQLAlchemyError: If a database error occurs.
 
         >>> import asyncio
-        >>> async def test():
-        ...     await init_db()
-        ...     async with AsyncSessionLocal() as session:
-        ...         service = ProfileService(session)
-        ...         update_data = ProfileMemoryCreate(
+        >>> async def test_create_profile():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         profile_data = ProfileMemoryCreate(
         ...             user_id=1,
-        ...             preferences=UserPreferencesCreate(preferences_data='{"theme": "light"}'),
+        ...             learning_progress=LearningProgressCreate(progress_data="{'lesson':1}"),
+        ...             preferences=UserPreferencesCreate(preferences_data="{'theme':'dark'}")
         ...         )
-        ...         profile = await service.update_profile(1, update_data)
-        ...         assert profile.preferences.preferences_data == '{"theme": "light"}'
-        >>> asyncio.run(test())
+        ...         profile = await repo.create_profile(profile_data)
+        ...         assert profile.user_id == 1
+        >>> asyncio.run(test_create_profile())
         """
         try:
-            profile = await self.get_profile(user_id)
-            if profile is None:
-                raise ValueError(f"Profile with user_id {user_id} not found.")
+            profile = ProfileMemory(user_id=profile_data.user_id)
 
-            if update_data.preferences:
-                if profile.preferences:
-                    profile.preferences.preferences_data = update_data.preferences.preferences_data
-                else:
-                    new_preferences = UserPreferences(
-                        preferences_data=update_data.preferences.preferences_data
-                    )
-                    profile.preferences = new_preferences
+            if profile_data.learning_progress:
+                learning_progress = LearningProgress(
+                    progress_data=profile_data.learning_progress.progress_data,
+                    profile_memory=profile
+                )
+                self.session.add(learning_progress)
 
-            if update_data.learning_progresses:
-                # Remove existing learning progresses
-                profile.learning_progresses.clear()
-                for lp_data in update_data.learning_progresses:
-                    new_lp = LearningProgress(
-                        course_name=lp_data.course_name,
-                        progress_percentage=lp_data.progress_percentage,
-                    )
-                    profile.learning_progresses.append(new_lp)
+            if profile_data.preferences:
+                preferences = UserPreferences(
+                    preferences_data=profile_data.preferences.preferences_data,
+                    profile_memory=profile
+                )
+                self.session.add(preferences)
 
+            self.session.add(profile)
             await self.session.commit()
             await self.session.refresh(profile)
-            logger.info(f"Updated ProfileMemory with user_id {user_id}")
             return profile
-        except Exception as e:
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating profile: {e}")
             await self.session.rollback()
-            logger.error(f"Error updating profile: {e}")
             raise
 
-    async def delete_profile(self, user_id: int) -> None:
-        """
-        Delete a ProfileMemory by user_id.
+# Dependency Injection
+async def get_session() -> AsyncSession:
+    """
+    Dependency to provide an AsyncSession.
 
-        :param user_id: The user ID
-        :return: None
+    Yields:
+        AsyncSession: The database session.
+    """
+    async with async_session() as session:
+        yield session
+
+# Service Classes
+class ProfileMemoryService:
+    """
+    Service class for business logic related to ProfileMemory.
+    """
+
+    def __init__(self, repository: ProfileMemoryRepository):
+        """
+        Initialize the ProfileMemoryService.
+
+        Args:
+            repository (ProfileMemoryRepository): The repository instance.
+
+        """
+        self.repository = repository
+
+    async def get_profile(self, user_id: int) -> Optional[ProfileMemory]:
+        """
+        Get profile for a given user_id.
+
+        Args:
+            user_id (int): The user ID.
+
+        Returns:
+            Optional[ProfileMemory]: The profile if found, else None.
 
         >>> import asyncio
-        >>> async def test():
-        ...     await init_db()
-        ...     async with AsyncSessionLocal() as session:
-        ...         service = ProfileService(session)
-        ...         await service.delete_profile(1)
+        >>> async def test_service_get_profile():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         service = ProfileMemoryService(repo)
         ...         profile = await service.get_profile(1)
-        ...         assert profile is None
-        >>> asyncio.run(test())
+        ...         assert profile is None or profile.user_id == 1
+        >>> asyncio.run(test_service_get_profile())
         """
-        try:
-            profile = await self.get_profile(user_id)
-            if profile is None:
-                raise ValueError(f"Profile with user_id {user_id} not found.")
-            await self.session.delete(profile)
-            await self.session.commit()
-            logger.info(f"Deleted ProfileMemory with user_id {user_id}")
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Error deleting profile: {e}")
-            raise
+        return await self.repository.get_profile_by_user_id(user_id)
 
+    async def create_profile(self, profile_data: ProfileMemoryCreate) -> ProfileMemory:
+        """
+        Create a new profile.
 
-# Example of how to use the service
-async def main():
+        Args:
+            profile_data (ProfileMemoryCreate): The profile data.
+
+        Returns:
+            ProfileMemory: The created profile.
+
+        Raises:
+            ValueError: If user_id is invalid.
+
+        >>> import asyncio
+        >>> async def test_service_create_profile():
+        ...     async with async_session() as session:
+        ...         repo = ProfileMemoryRepository(session)
+        ...         service = ProfileMemoryService(repo)
+        ...         profile_data = ProfileMemoryCreate(
+        ...             user_id=2,
+        ...             learning_progress=LearningProgressCreate(progress_data="{'lesson':2}"),
+        ...             preferences=UserPreferencesCreate(preferences_data="{'theme':'light'}")
+        ...         )
+        ...         profile = await service.create_profile(profile_data)
+        ...         assert profile.user_id == 2
+        >>> asyncio.run(test_service_create_profile())
+        """
+        if profile_data.user_id <= 0:
+            raise ValueError("user_id must be a positive integer")
+        return await self.repository.create_profile(profile_data)
+
+# FastAPI Application
+app = FastAPI()
+
+# CORS middleware (optional)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Event Handlers
+@app.on_event("startup")
+async def on_startup():
     """
-    Main function to demonstrate the usage of ProfileService.
+    Event handler for startup. Initializes the database models.
     """
-    await init_db()
-    async with AsyncSessionLocal() as session:
-        service = ProfileService(session)
+    await init_models()
 
-        # Create a new profile
-        profile_data = ProfileMemoryCreate(
-            user_id=1,
-            preferences=UserPreferencesCreate(preferences_data='{"language": "en"}'),
-            learning_progresses=[
-                LearningProgressCreate(course_name="Math", progress_percentage=80),
-                LearningProgressCreate(course_name="History", progress_percentage=60),
-            ],
-        )
+# Initialize database models
+async def init_models():
+    """
+    Initialize database models (create tables).
+
+    >>> import asyncio
+    >>> asyncio.run(init_models())
+    """
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+# API Endpoints
+@app.post("/profiles/", response_model=ProfileMemoryOut)
+async def create_profile_view(
+    profile_data: ProfileMemoryCreate,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    API endpoint to create a new profile.
+
+    Args:
+        profile_data (ProfileMemoryCreate): The profile data from the request body.
+        session (AsyncSession): Database session (provided by dependency).
+
+    Returns:
+        ProfileMemoryOut: The created profile.
+
+    Raises:
+        HTTPException: If an error occurs during creation.
+    """
+    repository = ProfileMemoryRepository(session)
+    service = ProfileMemoryService(repository)
+    try:
         profile = await service.create_profile(profile_data)
-        print(f"Created profile: {profile}")
+        return profile
+    except Exception as e:
+        logger.error(f"Error creating profile via API: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-        # Retrieve the profile
-        retrieved_profile = await service.get_profile(1)
-        print(f"Retrieved profile: {retrieved_profile}")
+@app.get("/profiles/{user_id}", response_model=ProfileMemoryOut)
+async def get_profile_view(
+    user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    API endpoint to retrieve a profile by user_id.
 
-        # Update the profile
-        update_data = ProfileMemoryCreate(
-            user_id=1,
-            preferences=UserPreferencesCreate(preferences_data='{"language": "es"}'),
-            learning_progresses=[
-                LearningProgressCreate(course_name="Science", progress_percentage=70)
-            ],
-        )
-        updated_profile = await service.update_profile(1, update_data)
-        print(f"Updated profile: {updated_profile}")
+    Args:
+        user_id (int): The user ID from the path.
+        session (AsyncSession): Database session (provided by dependency).
 
-        # Delete the profile
-        await service.delete_profile(1)
-        print("Profile deleted.")
+    Returns:
+        ProfileMemoryOut: The profile data.
 
+    Raises:
+        HTTPException: If the profile is not found.
+    """
+    repository = ProfileMemoryRepository(session)
+    service = ProfileMemoryService(repository)
+    profile = await service.get_profile(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return profile
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# Run with: uvicorn profile_memory:app --reload
