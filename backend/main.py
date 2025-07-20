@@ -13,6 +13,7 @@ from .api.notifications.routes import router as notification_router
 from .api.analytics.routes import router as analytics_router
 from .api.recommendations.routes import router as recommendation_router
 from .api.billing.routes import router as billing_router
+from .api.quizzes.routes import router as quiz_router
 from .teacher_agents.history_agent import HistoryTeacher
 from .teacher_agents.science_agent import ScienceAgent
 from .teacher_agents.tech_agent import TechTeacherAgent
@@ -46,6 +47,7 @@ app.include_router(notification_router, prefix="/api/notifications", tags=["Noti
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(recommendation_router, prefix="/api/recommendations", tags=["Recommendations"])
 app.include_router(billing_router, prefix="/api/billing", tags=["Billing"])
+app.include_router(quiz_router, prefix="/api/quizzes", tags=["Quizzes"])
 
 # Initialize components
 history_teacher = HistoryTeacher(model="gpt-3.5-turbo")
