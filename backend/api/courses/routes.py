@@ -5,6 +5,8 @@ from ...core.database import get_async_db
 from . import crud, models, schemas, recommendation
 from ..auth import crud as auth_crud
 from ...ml.recommendation_model import RecommendationModel
+from ...agents.adaptive_quiz_agent import app as adaptive_quiz_app
+from ...agents.peer_review_agent import app as peer_review_app
 
 router = APIRouter()
 recommendation_model = RecommendationModel()
@@ -89,3 +91,20 @@ async def get_course_recommendations(user_id: int, db: AsyncSession = Depends(ge
         return {"recommendations": recommendations}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting recommendations: {str(e)}")
+
+@router.post("/quiz/start")
+async def start_quiz():
+    initial_state = adaptive_quiz_app.invoke({})
+    return initial_state
+
+@router.post("/quiz/answer")
+async def answer_quiz(state: dict):
+    # This is a simplified interaction. In a real application, you would
+    # manage the state more carefully.
+    next_state = adaptive_quiz_app.invoke(state)
+    return next_state
+
+@router.post("/peer_review/submit")
+async def submit_for_peer_review(submission: dict):
+    initial_state = peer_review_app.invoke(submission)
+    return initial_state

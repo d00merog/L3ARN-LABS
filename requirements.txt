@@ -1,3 +1,20 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-jose
+passlib
+python-multipart
+aiohttp
+python-dotenv
+bcrypt
+openai
+transformers
+torch
+tiktoken
+numpy
+scikit-learn
+langgraph
 fastapi==0.116.1
 uvicorn==0.35.0
 sqlalchemy==2.0.41
@@ -21,3 +38,4 @@ authlib==1.2.1
 alembic==1.13.1
 alembic==1.13.1
 sqlfluff==2.3.5
+
