@@ -33,6 +33,7 @@ const Navbar: React.FC = () => {
     { label: 'Courses', path: '/courses' },
     { label: 'Language Preservation', path: '/language-preservation' },
     { label: 'Dashboard', path: '/dashboard', authRequired: true },
+    { label: 'Instructor Dashboard', path: '/instructor-dashboard', authRequired: true },
   ]
 
   return (
