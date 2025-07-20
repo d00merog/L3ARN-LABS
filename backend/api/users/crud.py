@@ -3,7 +3,8 @@ from typing import List, Dict, Optional, Any
 from . import models, schemas
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
-from ...core.security import verify_password, get_password_hash, create_access_token
+from ...core.security import verify_password, get_password_hash
+from ..auth.crud import create_tokens
 from datetime import timedelta
 from ...core.config.settings import settings
 from fastapi import HTTPException
@@ -73,11 +74,8 @@ async def authenticate_user(db: AsyncSession, email: str, password: str):
         return None
     return user
 
-def create_user_token(user: schemas.User):
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    return create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
+async def create_user_token(db: AsyncSession, user: schemas.User):
+    return await create_tokens(db, user)
 
 async def get_user_by_address(db: AsyncSession, address: str):
     result = await db.execute(select(models.User).filter(models.User.web3_address == address))
