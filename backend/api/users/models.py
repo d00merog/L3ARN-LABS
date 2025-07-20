@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, ARRAY, JSON
+from sqlalchemy.orm import relationship
 from ...core.database import Base
 
 class User(Base):
@@ -16,3 +17,4 @@ class User(Base):
     level = Column(Integer, default=1)
     xp = Column(Integer, default=0)
     achievements = Column(JSON, default=[])
+    subscription = relationship("Subscription", uselist=False, back_populates="user")
