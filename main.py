@@ -8,6 +8,7 @@ from backend.api.lessons import routes as lesson_routes
 from backend.api.notifications import routes as notification_routes
 from backend.api.analytics import routes as analytics_routes
 from backend.api.billing import routes as billing_routes
+from backend.api.gradebook import routes as gradebook_routes
 from backend.core.config.settings import settings
 
 # Ensure Brave Search API key is set
@@ -32,6 +33,7 @@ app.include_router(lesson_routes.router, prefix="/api/lessons", tags=["Lessons"]
 app.include_router(notification_routes.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(analytics_routes.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(billing_routes.router, prefix="/api/billing", tags=["Billing"])
+app.include_router(gradebook_routes.router, prefix="/api/gradebook", tags=["Gradebook"])
 
 @app.on_event("startup")
 async def startup_event():
