@@ -55,7 +55,12 @@ async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[m
 
 async def create_user(db: AsyncSession, user: schemas.UserCreate):
     hashed_password = get_password_hash(user.password)
-    db_user = models.User(email=user.email, hashed_password=hashed_password)
+    db_user = models.User(
+        email=user.email,
+        hashed_password=hashed_password,
+        username=getattr(user, "username", None),
+        role=user.role.value if hasattr(user, "role") else models.UserRole.STUDENT.value,
+    )
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)

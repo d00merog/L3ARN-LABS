@@ -1,8 +1,14 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from enum import Enum
 from ..courses.schemas import Course
 
 # ... (existing code)
+
+class UserRole(str, Enum):
+    STUDENT = "student"
+    TEACHER = "teacher"
+
 
 class UserBase(BaseModel):
     email: str
@@ -10,10 +16,12 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    role: UserRole = UserRole.STUDENT
 
 class User(UserBase):
     id: int
     is_active: bool
+    role: UserRole
 
     class Config:
         orm_mode = True
