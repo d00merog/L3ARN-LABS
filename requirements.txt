@@ -16,6 +16,7 @@ numpy==2.3.1
 scikit-learn==1.7.1
 hvac==2.3.0
 pre-commit==4.2.0
+stripe==9.8.0
 authlib==1.2.1
 alembic==1.13.1
 alembic==1.13.1
