@@ -18,3 +18,24 @@ pip install pre-commit
 pre-commit install
 ```
 
+## Feedback Bot
+
+The backend includes a Celery beat task that emails learners the top three wrong
+answers for each lesson every night. Configure Redis and SMTP credentials via
+environment variables:
+
+```
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=username
+SMTP_PASSWORD=password
+```
+
+Run the worker and scheduler with:
+
+```bash
+celery -A backend.feedback.tasks.celery_app worker -B
+```
+
