@@ -11,17 +11,13 @@ router = APIRouter()
 async def get_course_analytics(
     course_id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(auth_crud.get_current_user)
+    current_user: schemas.User = Depends(auth_crud.get_current_teacher)
 ):
-    if not current_user.is_instructor:
-        raise HTTPException(status_code=403, detail="Not authorized to view analytics")
     return crud.get_course_analytics(db, course_id)
 
 @router.get("/instructor/analytics", response_model=schemas.InstructorAnalytics)
 async def get_instructor_analytics(
     db: Session = Depends(get_db),
-    current_user: schemas.User = Depends(auth_crud.get_current_user)
+    current_user: schemas.User = Depends(auth_crud.get_current_teacher)
 ):
-    if not current_user.is_instructor:
-        raise HTTPException(status_code=403, detail="Not authorized to view analytics")
     return crud.get_instructor_analytics(db, current_user.id)
