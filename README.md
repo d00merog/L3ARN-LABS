@@ -3,109 +3,85 @@
 
 ![351919820-309d5534-f15a-4872-a854-f3fbd5f28e1c](https://github.com/user-attachments/assets/8b673575-b861-42f7-8b9e-a6a145ec24b1)
 
-## Secrets management
+## Quick Start with Docker Compose
 
-Application secrets are no longer stored in a local `.env` file. Configure a self-hosted HashiCorp Vault and provide `VAULT_ADDR` and `VAULT_TOKEN` environment variables (or Docker secrets) when running the application. Secrets are looked up from Vault at `l3arn-labs/<SECRET_NAME>` and fallback to values in `/run/secrets/<SECRET_NAME>` or environment variables.
+This project is fully containerized and can be run with Docker Compose.
 
-## Pre-commit hooks
-
-This repository uses [pre-commit](https://pre-commit.com/) with `detect-secrets` to scan for secrets before every commit.
-
-Install the hooks after cloning:
-
-```bash
-pip install pre-commit
-pre-commit install
-```
-
-## Quick Start
-
-This project consists of a Python backend and a TypeScript frontend.
-
-### Backend
-
-The backend is a FastAPI application.
-
-1.  **Navigate to the backend directory:**
+1.  **Clone the repository:**
     ```bash
-    cd backend
+    git clone https://github.com/your-username/l3arn-labs.git
+    cd l3arn-labs
     ```
 
-2.  **Install dependencies:**
+2.  **Create a `.env` file from the example:**
     ```bash
-    pip install -r requirements.txt
+    cp .env.example .env
     ```
+    Update the `.env` file with your secrets, or use the default values for local development.
 
-3.  **Run the development server:**
+3.  **Run the application:**
     ```bash
-    uvicorn main:app --reload
+    docker-compose up --build
     ```
-    The backend will be running at `http://localhost:8000`.
+    The backend will be running at `http://localhost:8000` and the frontend at `http://localhost:3000`.
 
-### Frontend
+## Secrets Management
 
-The frontend is a Next.js application.
+Application secrets are managed by HashiCorp Vault. The `docker-compose.yml` file includes a Vault service for local development.
 
-**Note:** The frontend setup is unusual as it is missing a `package.json` file. The following instructions are based on a standard Next.js project and may need to be adapted.
+When running the application with Docker Compose, the backend will automatically connect to the local Vault service.
 
-1.  **Navigate to the frontend directory:**
-    ```bash
-    cd frontend
-    ```
+For production deployments, you will need to provide the `VAULT_ADDR` and `VAULT_TOKEN` environment variables (or Docker secrets) to the backend service.
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+## API Map
 
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-    The frontend will be running at `http://localhost:3000`.
+The backend API is a FastAPI application with the following endpoints:
+
+*   **Auth** (`/api/v1/auth`)
+    *   `POST /token`: Authenticate a user and receive a JWT token.
+        *   **Request Body:** `username`, `password`
+        *   **Response:** `access_token`, `token_type`
+*   **Users** (`/api/v1/users`)
+    *   `GET /me`: Get the profile of the currently authenticated user.
+    *   `PUT /me`: Update the profile of the currently authenticated user.
+*   **Courses** (`/api/v1/courses`)
+    *   `GET /`: Get a list of all available courses.
+    *   `POST /`: Create a new course (instructors only).
+    *   `GET /{course_id}`: Get the details of a specific course.
+    *   `PUT /{course_id}`: Update a course (instructors only).
+    *   `DELETE /{course_id}`: Delete a course (instructors only).
+*   **Lessons** (`/api/v1/lessons`)
+    *   `GET /courses/{course_id}/lessons`: Get a list of all lessons for a course.
+    *   `POST /courses/{course_id}/lessons`: Create a new lesson for a course (instructors only).
+    *   `GET /{lesson_id}`: Get the details of a specific lesson.
+    *   `PUT /{lesson_id}`: Update a lesson (instructors only).
+    *   `DELETE /{lesson_id}`: Delete a lesson (instructors only).
 
 ## How to Contribute
 
 We welcome contributions to L3ARN-LABS! Please follow these guidelines to ensure a smooth development process.
 
-### Branching
+### Setting up a Development Environment
 
-*   Create a new branch for each feature or bug fix.
-*   Use a descriptive branch name, such as `feat/add-new-feature` or `fix/resolve-bug`.
-*   Push your changes to your fork and submit a pull request to the `main` branch.
+1.  **Fork the repository** on GitHub.
+2.  **Clone your fork** to your local machine.
+3.  **Create a new branch** for your feature or bug fix.
+4.  **Install the pre-commit hooks:**
+    ```bash
+    pip install pre-commit
+    pre-commit install
+    ```
 
-### Code Style
+### Making Changes
 
-*   **Python:** We use [black](https://github.com/psf/black) for code formatting. Please run `black .` before committing your changes.
-*   **TypeScript/JavaScript:** We recommend using [prettier](https://prettier.io/) for code formatting.
+1.  **Make your changes** to the codebase.
+2.  **Write tests** for your changes. This project currently lacks a test suite, so we encourage you to add tests for any new features or bug fixes you introduce.
+3.  **Run the tests** to ensure that your changes don't break anything.
+4.  **Format your code** using `black` for Python and `prettier` for TypeScript/JavaScript.
 
-### Testing
+### Submitting a Pull Request
 
-This project currently lacks a test suite. We encourage you to add tests for any new features or bug fixes you introduce.
-
-## API Map
-
-The backend API is organized into the following modules:
-
-*   **/auth**: User authentication and authorization.
-    *   `POST /token`: Get an access token.
-*   **/users**: User management.
-    *   `GET /users/me`: Get the current user's profile.
-    *   `PUT /users/me`: Update the current user's profile.
-*   **/courses**: Course management.
-    *   `GET /courses`: Get a list of all courses.
-    *   `POST /courses`: Create a new course.
-    *   `GET /courses/{course_id}`: Get a single course.
-    *   `PUT /courses/{course_id}`: Update a course.
-    *   `DELETE /courses/{course_id}`: Delete a course.
-*   **/lessons**: Lesson management.
-    *   `GET /courses/{course_id}/lessons`: Get all lessons for a course.
-    *   `POST /courses/{course_id}/lessons`: Create a new lesson.
-    *   `GET /lessons/{lesson_id}`: Get a single lesson.
-    *   `PUT /lessons/{lesson_id}`: Update a lesson.
-    *   `DELETE /lessons/{lesson_id}`: Delete a lesson.
-*   **/achievements**: Gamification achievements.
-*   **/analytics**: User analytics.
-*   **/gamification**: Gamification utilities.
-*   **/notifications**: User notifications.
-*   **/recommendations**: Course recommendations.
+1.  **Push your changes** to your fork on GitHub.
+2.  **Create a pull request** from your fork to the `main` branch of the original repository.
+3.  **Provide a clear and descriptive title and description** for your pull request.
+4.  **Request a review** from one of the project maintainers.
