@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_async_db
-from ..core.security import create_access_token
-from ..api.users import crud as user_crud
 from ..api.auth import schemas
+from ..api.auth.crud import create_tokens
+from ..api.users import crud as user_crud
 
 router = APIRouter()
 
@@ -20,12 +20,13 @@ async def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return await create_tokens(db, user)
 
 @router.post("/register", response_model=schemas.User)
 async def register_user(user: schemas.UserCreate, db: AsyncSession = Depends(get_async_db)):
     db_user = await user_crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    return await user_crud.create_user(db=db, user=user)
+    new_user = await user_crud.create_user(db=db, user=user)
+    return await create_tokens(db, new_user)
+
