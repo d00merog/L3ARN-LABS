@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = Field(default_factory=lambda: get_secret("JWT_SECRET_KEY", "your_jwt_secret_key_here"))
     ALGORITHM: str = Field(default_factory=lambda: get_secret("JWT_ALGORITHM", "HS256"))
+
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default_factory=lambda: int(get_secret("ACCESS_TOKEN_EXPIRE_MINUTES", "30")))
+    
+    # Database
+    DATABASE_URL: str = Field(default_factory=lambda: get_secret("DATABASE_URL", "postgresql://user:password@localhost:5432/l3arn_labs"))
+    SQL_DEBUG: bool = os.getenv("SQL_DEBUG", "false").lower() == "true"
+    
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
         default_factory=lambda: int(get_secret("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     )
@@ -29,6 +36,7 @@ class Settings(BaseSettings):
         default_factory=lambda: get_secret("DATABASE_URL", "postgresql://user:password@localhost:5432/l3arn_labs")
     )
     SQL_DEBUG: bool = get_secret("SQL_DEBUG", "false").lower() == "true"
+
 
     # CORS
     ALLOWED_ORIGINS: List[str] = [
@@ -52,15 +60,14 @@ class Settings(BaseSettings):
     class Config:
         """Pydantic config"""
         case_sensitive = True
+
         env_file = ".env"
         extra = "ignore"
-
 
 @lru_cache()
 def get_settings() -> Settings:
     """Create cached settings instance"""
     return Settings()
-
 
 # Initialize settings
 settings = get_settings()
