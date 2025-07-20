@@ -11,14 +11,15 @@ from ...core.security import (
     create_refresh_token,
     decode_token,
 )
-from ..users.models import User
+from ..users.models import User, UserRole
 from .models import RefreshToken
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 async def create_tokens(db: AsyncSession, user: User):
-    access = create_access_token({"sub": user.email})
-    refresh = create_refresh_token({"sub": user.email})
+    payload = {"sub": user.email, "role": user.role}
+    access = create_access_token(payload)
+    refresh = create_refresh_token(payload)
     hashed = sha256(refresh.encode()).hexdigest()
     expires_at = datetime.utcnow() + timedelta(days=7)
     db_token = RefreshToken(token=hashed, user_id=user.id, expires_at=expires_at)
@@ -55,3 +56,23 @@ async def rotate_refresh_token(
     new_tokens = await create_tokens(db, stored.user)
     await db.commit()
     return new_tokens
+
+
+async def get_current_teacher(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_async_db),
+) -> User:
+    payload = decode_token(token)
+    if not payload or payload.get("role") != UserRole.TEACHER.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher credentials required",
+        )
+    email = payload.get("sub")
+    if email is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
