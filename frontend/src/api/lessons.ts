@@ -21,6 +21,23 @@ export const getLesson = async (lessonId: number): Promise<Lesson> => {
   }
 };
 
+export const createLesson = async (
+  lessonData: Omit<Lesson, 'id'>
+): Promise<Lesson> => {
+  try {
+    const response = await axios.post<Lesson>(`${API_BASE_URL}/api/lessons/`, lessonData, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating lesson:', error);
+    throw error;
+  }
+};
+
 export const getAudioLesson = async (topic: string, era: string): Promise<{ audio_url: string }> => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/lessons/audio`, {

@@ -3,7 +3,9 @@ Application settings with environment variable configuration
 """
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import Field
 import os
+from ..config.secrets import get_secret
 import logging
 from functools import lru_cache
 
@@ -15,12 +17,12 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     
     # Security
-    SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_jwt_secret_key_here")
-    ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    SECRET_KEY: str = Field(default_factory=lambda: get_secret("JWT_SECRET_KEY", "your_jwt_secret_key_here"))
+    ALGORITHM: str = Field(default_factory=lambda: get_secret("JWT_ALGORITHM", "HS256"))
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default_factory=lambda: int(get_secret("ACCESS_TOKEN_EXPIRE_MINUTES", "30")))
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/l3arn_labs")
+    DATABASE_URL: str = Field(default_factory=lambda: get_secret("DATABASE_URL", "postgresql://user:password@localhost:5432/l3arn_labs"))
     SQL_DEBUG: bool = os.getenv("SQL_DEBUG", "false").lower() == "true"
     
     # CORS
@@ -45,8 +47,6 @@ class Settings(BaseSettings):
     class Config:
         """Pydantic config"""
         case_sensitive = True
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 @lru_cache()
 def get_settings() -> Settings:
