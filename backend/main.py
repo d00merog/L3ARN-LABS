@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from .core.security import SecurityMiddleware, RateLimiter, network_security_middleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from .core.database import get_async_db
 from .core.config.settings import settings
@@ -12,6 +13,13 @@ from .api.lessons.routes import router as lesson_router
 from .api.notifications.routes import router as notification_router
 from .api.analytics.routes import router as analytics_router
 from .api.recommendations.routes import router as recommendation_router
+from .api.billing.routes import router as billing_router
+from .api.v1.litellm.routes import router as litellm_router
+from .api.v1.bittensor.routes import router as bittensor_router
+from .api.v1.webvm.routes import router as webvm_router
+from .api.v1.dashboard.routes import router as dashboard_router
+from .api.v1.security.routes import router as security_router
+from .api.v1.landing.routes import router as landing_router
 from .teacher_agents.history_agent import HistoryTeacher
 from .teacher_agents.science_agent import ScienceAgent
 from .teacher_agents.tech_agent import TechTeacherAgent
@@ -25,15 +33,45 @@ from .api.users.models import User
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AI-Powered Learning Platform")
+app = FastAPI(
+    title="L3ARN Labs - AI-Powered Learning Platform",
+    description="Revolutionary AI education platform with Bittensor, WebVM, and decentralized learning",
+    version="2.0.0"
+)
+
+# Configure security middleware (before CORS)
+app.add_middleware(SecurityMiddleware, rate_limiter=RateLimiter())
+
+# Add network security middleware
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class NetworkSecurityMiddlewareWrapper(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        return await network_security_middleware(request, call_next)
+
+app.add_middleware(NetworkSecurityMiddlewareWrapper)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRF-Token"
+    ],
+    expose_headers=[
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining", 
+        "X-RateLimit-Reset"
+    ]
 )
 
 # Include routers
@@ -44,6 +82,13 @@ app.include_router(lesson_router, prefix="/api/lessons", tags=["Lessons"])
 app.include_router(notification_router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(recommendation_router, prefix="/api/recommendations", tags=["Recommendations"])
+app.include_router(billing_router, prefix="/api/billing", tags=["Billing"])
+app.include_router(litellm_router, prefix="/api/v1", tags=["LiteLLM"])
+app.include_router(bittensor_router, prefix="/api/v1", tags=["Bittensor"])
+app.include_router(webvm_router, prefix="/api/v1", tags=["WebVM"])
+app.include_router(dashboard_router, prefix="/api/v1", tags=["Dashboard"])
+app.include_router(security_router, prefix="/api/v1", tags=["Security"])
+app.include_router(landing_router, prefix="/api/v1", tags=["Landing"])
 
 # Initialize components
 history_teacher = HistoryTeacher(model="gpt-3.5-turbo")
