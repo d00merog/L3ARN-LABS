@@ -120,3 +120,127 @@ cython_debug/
 # Virtual environments
 *venv/
 *.virtualenv/
+
+# AI/ML Model files
+*.bin
+*.onnx
+*.pb
+models/
+checkpoints/
+weights/
+*.h5
+*.pkl
+*.joblib
+
+# Bittensor
+bittensor_data/
+*.wallet
+validator_logs/
+miner_logs/
+subtensor_data/
+
+# WebVM and execution environments
+webvm/
+*.wasm
+*.wat
+execution_cache/
+sandbox/
+
+# Security and certificates
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.pfx
+secrets/
+certificates/
+private_keys/
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mkv
+*.mp3
+*.wav
+*.flac
+
+# Test artifacts and coverage
+test-results/
+playwright-report/
+test-results.xml
+coverage.xml
+.nyc_output/
+.jest/
+
+# Next.js specific
+.next/
+out/
+.vercel
+.swc/
+
+# TypeScript
+*.tsbuildinfo
+
+# PWA
+sw.js
+workbox-*.js
+precache-manifest.*.js
+
+# Analytics and monitoring
+.amplitude
+.mixpanel
+monitoring/
+
+# Docker
+docker-compose.override.yml
+
+# Terraform (for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Redis
+dump.rdb
+
+# Additional Python patterns
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+build/
+dist/
+wheels/
+
+# Additional Node.js patterns
+.npm
+.eslintcache
+.stylelintcache
+.pnpm-debug.log*
+jspm_packages/
+
+# Additional environment files
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS specific
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*~
+
+# Temporary directories
+tmp/
+temp/
